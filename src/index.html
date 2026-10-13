@@ -1,0 +1,765 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b2a4a" id="themeColor">
+<meta name="description" content="Drag through a day on Jekyll Island. A live shoreline shows NOAA tide predictions and real sunrise and sunset times together.">
+<title>Jekyll Island · Tides & daylight</title>
+<style>
+@font-face{font-family:Archivo;src:url('{{FONT}}') format('woff2');font-weight:100 900;font-stretch:62% 125%;font-display:swap}
+:root{--ink:#04101e;--foam:#f1fbfa;--text:#e9f6f7;--muted:#9bbdc7;--glass:#62e3d3;--lamp:#ffb935;--sand:#ecd29e;--problem:#ff9a7a;--line:rgba(180,230,238,.17);--panel:#0b2a4a;--panel-2:#12375c;--ease:cubic-bezier(.16,1,.3,1);--bar-h:60px;
+font-family:Archivo,system-ui,sans-serif;color:var(--text);font-synthesis:none;font-size:16px;color-scheme:dark}
+*{box-sizing:border-box}
+html{background:#050b18;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--panel);overflow-x:hidden;transition:background-color .4s}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none;padding:0;-webkit-tap-highlight-color:transparent}
+button:disabled{cursor:default;opacity:.45}
+:focus-visible{outline:3px solid var(--lamp);outline-offset:3px;border-radius:10px}
+h1,h2,h3,p{margin:0}
+svg{display:block}
+.num{font-variant-numeric:tabular-nums}
+.icon{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.75;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* ---------- stage ---------- */
+.app{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;height:100dvh;min-height:660px;position:relative}
+.stage{position:relative;overflow:hidden;touch-action:pan-y;cursor:grab;user-select:none;-webkit-user-select:none;background:#0a1236}
+.stage.dragging{cursor:grabbing}
+#scene{position:absolute;inset:0;width:100%;height:100%;display:block}
+.bar{position:absolute;inset:0 0 auto;display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px clamp(12px,3vw,40px) 0;z-index:3;pointer-events:none}
+.bar>*{pointer-events:auto}
+.mark{display:flex;align-items:center;gap:10px;flex:none;color:#fff;text-shadow:0 1px 14px rgba(2,8,24,.5)}
+.mark svg{width:34px;height:34px;flex:none}
+.mark b{font-size:17px;font-weight:760;font-stretch:112%;letter-spacing:.01em;white-space:nowrap}
+.tools{display:flex;gap:8px;align-items:center}
+.seg{display:flex;background:rgba(3,12,26,.7);border-radius:999px;padding:2px;position:relative}
+.seg button{min-height:42px;min-width:44px;padding:0 15px;border-radius:999px;font-size:14px;font-weight:650;font-stretch:108%;color:var(--text);position:relative;z-index:1;transition:color .25s,background-color .25s}
+.seg button[aria-pressed=true]{background:var(--foam);color:var(--ink)}
+.seg button:not([aria-pressed=true]):hover{background:rgba(255,255,255,.1)}
+.ibtn{width:44px;height:44px;display:grid;place-items:center;border-radius:999px;background:rgba(3,12,26,.7);color:var(--text);transition:background-color .2s,transform .3s var(--ease)}
+.ibtn:hover{background:rgba(255,255,255,.16)}
+.ibtn:active{transform:scale(.92)}
+.ibtn.spin .icon{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+.readout{position:absolute;left:clamp(16px,3vw,40px);top:calc(var(--bar-h) + 6px);z-index:2;pointer-events:none;color:#fff;text-shadow:0 2px 26px rgba(2,8,24,.5)}
+.clock{display:flex;align-items:flex-start;font-size:clamp(70px,12.5vw,148px);font-weight:830;font-stretch:68%;line-height:1;letter-spacing:-.015em;font-variant-numeric:tabular-nums}
+.reel{display:inline-block;vertical-align:top;height:1em;overflow:hidden;-webkit-mask-image:linear-gradient(transparent,#000 24%,#000 76%,transparent);mask-image:linear-gradient(transparent,#000 24%,#000 76%,transparent)}
+.reel .strip{display:block;transform:translateY(calc(var(--i,0) * -1em));transition:transform .55s var(--ease)}
+.reel i{display:block;height:1em;line-height:1em;font-style:normal;text-align:center}
+.reel.blank i:first-child{opacity:0}
+.colon{display:inline-block;height:1em;line-height:.9em;padding:0 .02em;animation:blink 2s steps(1) infinite}
+@keyframes blink{50%{opacity:.35}}
+.ampm{display:flex;font-size:.24em;font-stretch:112%;font-weight:760;margin:.34em 0 0 .3em;letter-spacing:.06em}
+.ampm .reel{height:1em;-webkit-mask-image:none;mask-image:none}
+.dateline{margin-top:6px;font-size:clamp(15px,1.7vw,19px);font-weight:600;font-stretch:104%;letter-spacing:.005em;display:flex;flex-wrap:wrap;gap:2px 14px}
+.dateline span{white-space:nowrap}
+.next{pointer-events:auto;margin-top:10px;min-height:44px;padding:0 16px 0 14px;border-radius:999px;background:rgba(3,12,26,.7);display:inline-flex;align-items:center;gap:10px;font-size:15px;font-weight:620;text-shadow:none;color:var(--text);transition:background-color .2s,transform .35s var(--ease)}
+.next:hover{background:rgba(255,255,255,.17)}
+.next:active{transform:scale(.97)}
+.next .icon{width:20px;height:20px;color:var(--glass)}
+.next.sun .icon{color:var(--lamp)}
+.next b{font-weight:760}
+.next[hidden]{display:none}
+
+.gauge{position:absolute;left:0;top:0;z-index:2;pointer-events:none;will-change:transform;padding:9px 13px 10px;border-radius:14px;background:rgba(3,12,26,.82);color:#fff;min-width:max-content;white-space:nowrap;transition:opacity .4s}
+.gauge[hidden]{display:none}
+.gv{display:flex;align-items:baseline;gap:6px;line-height:1}
+.gnum{font-size:38px;font-weight:800;font-variant-numeric:tabular-nums;font-stretch:90%;display:inline-block;min-width:2.3ch}
+.gu{font-size:15px;font-weight:650;font-stretch:112%;color:var(--glass)}
+.gs{display:flex;align-items:center;gap:6px;margin-top:4px;font-size:13px;font-weight:650;font-stretch:108%;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.gs .est{margin-left:2px;padding:1px 5px;border:1px solid var(--line);border-radius:6px;font-size:10px;letter-spacing:.06em}
+.flow{width:14px;height:16px;overflow:hidden;color:var(--glass);flex:none}
+.flow svg{width:14px;height:32px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.flow.up svg{animation:flowup 1.1s linear infinite}
+.flow.down svg{animation:flowdown 1.1s linear infinite}
+.flow.slack svg{transform:translateY(-8px)}
+@keyframes flowup{from{transform:translateY(0)}to{transform:translateY(-16px)}}
+@keyframes flowdown{from{transform:translateY(-16px)}to{transform:translateY(0)}}
+
+.status{margin-right:auto;display:flex;align-items:center;gap:8px;padding:0 6px 0 13px;min-height:34px;border-radius:999px;background:rgba(3,12,26,.78);font-size:12px;font-weight:600;color:var(--muted);min-width:0}
+.status span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.status .dot{width:8px;height:8px;border-radius:50%;background:var(--glass);flex:none}
+.status.loading .dot{animation:pulse 1s ease-in-out infinite}
+.status.problem{color:var(--problem)}
+.status.problem .dot{background:var(--problem)}
+@keyframes pulse{50%{opacity:.25;transform:scale(.6)}}
+.status button{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;color:var(--text);position:relative}
+.status button::after{content:"";position:absolute;inset:-8px}
+.status button:hover{background:rgba(255,255,255,.14)}
+.status .icon{width:16px;height:16px}
+.hint{position:absolute;right:clamp(14px,3vw,40px);bottom:46px;z-index:2;pointer-events:none;padding:8px 14px;border-radius:999px;background:rgba(3,12,26,.78);font-size:13px;font-weight:620;display:flex;align-items:center;gap:8px;transition:opacity .6s,transform .6s var(--ease)}
+.hint.gone{opacity:0;transform:translateY(8px)}
+.hint svg{width:30px;height:12px;stroke:var(--lamp);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;animation:nudge 1.8s var(--ease) infinite}
+@keyframes nudge{0%,100%{transform:translateX(-4px)}50%{transform:translateX(4px)}}
+.veil{position:absolute;inset:0;z-index:2;display:grid;place-items:center;pointer-events:none;padding:0 20px 70px}
+.veil[hidden]{display:none}
+.veil-card{pointer-events:auto;max-width:340px;text-align:center;padding:20px 22px;border-radius:18px;background:rgba(3,12,26,.86);color:var(--text)}
+.veil-card h2{font-size:21px;font-weight:760;font-stretch:90%}
+.veil-card p{margin-top:6px;font-size:14px;line-height:1.45;color:var(--muted)}
+.veil-card .go{margin-top:14px;min-height:44px;padding:0 20px;border-radius:999px;background:var(--foam);color:var(--ink);font-weight:700;font-stretch:108%}
+.veil-card .go[hidden]{display:none}
+
+/* ---------- deck ---------- */
+.deck{position:relative;z-index:4;background:var(--panel);border-radius:28px 28px 0 0;margin-top:-28px;padding:12px clamp(12px,3vw,40px) max(14px,env(safe-area-inset-bottom));box-shadow:0 -16px 44px rgba(2,8,24,.38);transition:background-color .4s}
+.deck-in{max-width:1180px;margin:0 auto;min-width:0}
+.dayrow{display:flex;align-items:center;gap:6px}
+.dayrow .ibtn{background:var(--panel-2);flex:none;width:40px;height:52px;border-radius:14px}
+.days{position:relative;display:flex;gap:6px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;padding:2px 0;scroll-snap-type:x proximity}
+.days::-webkit-scrollbar{display:none}
+.dayind{position:absolute;top:2px;left:0;height:calc(100% - 4px);width:0;border-radius:14px;background:var(--foam);transition:transform .6s var(--ease);pointer-events:none}
+.day{position:relative;z-index:1;flex:1 0 66px;max-width:160px;min-height:70px;padding:6px 4px 5px;border-radius:14px;display:grid;justify-items:center;align-content:center;gap:1px;scroll-snap-align:center;color:var(--text);transition:color .3s;--spark:var(--glass);--sun:rgba(255,185,53,.22)}
+.day:not([aria-pressed=true]):hover{background:rgba(255,255,255,.07)}
+.day .dow{font-size:11px;font-weight:700;font-stretch:115%;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);transition:color .3s}
+.day .dom{font-size:25px;font-weight:800;font-stretch:78%;line-height:1.05}
+.day .spark{width:calc(100% - 10px);height:16px;margin-top:1px}
+.day .spark path{fill:none;stroke:var(--spark);stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.day .spark rect{fill:var(--sun)}
+.day .rng{font-size:10.5px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;transition:color .3s}
+.day[aria-pressed=true]{color:var(--ink);--spark:#0a5568;--sun:rgba(255,160,20,.4)}
+.day[aria-pressed=true] .dow,.day[aria-pressed=true] .rng{color:#2c5662}
+.today-btn{flex:none;min-height:40px;padding:0 14px;border-radius:999px;background:var(--panel-2);font-size:13px;font-weight:700;font-stretch:108%}
+.today-btn[hidden]{display:none}
+.today-btn:hover,.dayrow .ibtn:hover{background:rgba(255,255,255,.14)}
+#date{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.calwrap{position:relative;flex:none}
+
+.chartwrap{position:relative;margin-top:8px;border-radius:18px;background:rgba(255,255,255,.04);cursor:ew-resize;touch-action:pan-y;user-select:none;-webkit-user-select:none;overflow:hidden}
+.chartwrap svg{width:100%}
+.chartwrap text{font-family:inherit;font-variant-numeric:tabular-nums}
+.reveal{animation:reveal .9s var(--ease) both}
+@keyframes reveal{from{clip-path:inset(0 100% 0 0)}to{clip-path:inset(0 0 0 0)}}
+.note{margin:7px 3px 0;font-size:12.5px;line-height:1.45;color:var(--muted)}
+.strip{display:flex;gap:8px;margin-top:8px;align-items:stretch}
+.play{flex:none;width:60px;border-radius:16px;background:var(--lamp);color:#3a2300;display:grid;place-items:center;transition:transform .35s var(--ease),background-color .2s;position:relative}
+.play:hover{background:#ffc75d}
+.play:active{transform:scale(.94)}
+.play .icon{width:28px;height:28px;stroke-width:2.2}
+.play .icon.fill{fill:currentColor}
+.play[hidden] .icon{display:none}
+.play .pause{display:none}
+.play.on .pause{display:block}
+.play.on .go{display:none}
+.evs{display:flex;gap:8px;overflow-x:auto;flex:1;min-width:0;scrollbar-width:none;scroll-snap-type:x proximity}
+.evs::-webkit-scrollbar{display:none}
+.ev{flex:1 0 128px;min-height:58px;padding:8px 14px 8px 12px;border-radius:16px;background:rgba(255,255,255,.06);display:grid;grid-template-columns:auto 1fr;column-gap:11px;align-items:center;text-align:left;border:1.5px solid transparent;scroll-snap-align:start;transition:background-color .2s,border-color .3s,transform .35s var(--ease)}
+.ev:hover{background:rgba(255,255,255,.11)}
+.ev:active{transform:scale(.97)}
+.ev .icon{grid-row:1/3;width:26px;height:26px;color:var(--glass)}
+.ev.sun .icon{color:var(--lamp)}
+.ev.beach .icon{color:var(--sand)}
+.ev .n{font-size:11.5px;font-weight:700;font-stretch:112%;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);align-self:end;white-space:nowrap}
+.ev .t{font-size:19px;font-weight:760;font-stretch:84%;line-height:1.15;font-variant-numeric:tabular-nums;align-self:start;white-space:nowrap}
+.ev .t small{font-size:13px;font-weight:600;color:var(--muted);margin-left:7px;font-stretch:100%}
+.ev.next{border-color:var(--glass);background:rgba(98,227,211,.1)}
+.ev.sun.next{border-color:var(--lamp);background:rgba(255,185,53,.1)}
+.ev.here{background:var(--foam);color:var(--ink);border-color:var(--foam)}
+.ev.here .n,.ev.here .t small{color:#355763}
+.ev.here .icon{color:#0a5568}
+.ev.ping{animation:ping .7s var(--ease)}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(98,227,211,.7)}100%{box-shadow:0 0 0 16px rgba(98,227,211,0)}}
+
+/* ---------- sheet ---------- */
+.sheet{background:#050b18;padding:clamp(36px,6vw,72px) clamp(16px,3vw,40px) 40px}
+.sheet-in{max-width:1180px;margin:0 auto;display:grid;grid-template-columns:repeat(12,1fr);gap:clamp(28px,4vw,56px) 28px}
+.sheet h2{font-size:clamp(26px,3.4vw,40px);font-weight:800;font-stretch:76%;letter-spacing:-.01em;line-height:1.05}
+.sheet p{line-height:1.55;color:#b9d3da;font-size:15.5px;max-width:62ch}
+.sheet p+p{margin-top:10px}
+.sheet a{color:var(--glass);text-underline-offset:3px}
+.card-beach{grid-column:span 7}
+.card-moon{grid-column:span 5}
+.card-read{grid-column:span 7}
+.card-src{grid-column:span 5}
+.windows{list-style:none;margin:18px 0 0;padding:0;display:grid;gap:8px}
+.windows li{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:0 4px;min-height:54px;border-bottom:1px solid var(--line);font-size:16px}
+.windows li button{display:flex;justify-content:space-between;align-items:center;width:100%;min-height:54px;gap:12px;text-align:left;border-radius:10px}
+.windows li button:hover{color:var(--glass)}
+.windows .w{font-weight:760;font-stretch:88%;font-size:20px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.windows .l{color:var(--muted)}
+.moon-row{display:flex;gap:22px;align-items:center;margin-top:18px}
+.moon-row svg{width:92px;height:92px;flex:none}
+.moon-row b{display:block;font-size:22px;font-weight:780;font-stretch:84%}
+.moon-row span{color:var(--muted);font-size:14px}
+.card-moon p{margin-top:16px}
+.legend{margin:18px 0 0;padding:0;list-style:none;display:grid;gap:12px}
+.legend li{display:grid;grid-template-columns:30px 1fr;gap:12px;line-height:1.5;color:#b9d3da;font-size:15.5px}
+.legend svg{width:26px;height:26px;color:var(--glass);margin-top:1px}
+.legend b{color:#fff;font-weight:700}
+.src p{font-size:14.5px}
+.foot{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding-top:20px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+.foot div{display:flex;gap:8px;flex-wrap:wrap}
+.pill{min-height:44px;padding:0 18px;border-radius:999px;background:rgba(255,255,255,.08);display:inline-flex;align-items:center;gap:9px;font-weight:650;font-stretch:106%;color:var(--text);font-size:14px;transition:background-color .2s}
+.pill:hover{background:rgba(255,255,255,.16)}
+.pill .icon{width:18px;height:18px}
+
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%) translateY(0);z-index:20;background:var(--foam);color:var(--ink);padding:12px 18px;border-radius:999px;font-weight:650;font-size:14px;box-shadow:0 10px 30px rgba(0,0,0,.4);transition:opacity .3s,transform .5s var(--ease);max-width:calc(100vw - 32px)}
+.toast[hidden]{display:block;opacity:0;transform:translateX(-50%) translateY(20px);pointer-events:none}
+
+.enter .deck{animation:rise .9s .15s var(--ease) both}
+.enter .readout,.enter .bar{animation:fade .9s .25s var(--ease) both}
+@keyframes rise{from{transform:translateY(40px);opacity:0}}
+@keyframes fade{from{opacity:0;transform:translateY(-10px)}}
+
+@media(max-width:900px){.card-beach,.card-moon,.card-read,.card-src{grid-column:1/-1}}
+@media(max-width:560px){
+ :root{--bar-h:56px}
+ .mark b{display:none}
+ .status:not(.problem):not(.loading) span,.status button{display:none}
+ .status{padding:0 12px 0 12px}
+ .status.problem span,.status.loading span{max-width:46vw}
+ .seg button{padding:0 12px;font-size:13px;min-width:42px}
+ .deck{padding-top:12px}
+ .day{flex-basis:60px;min-height:74px}
+ .dayrow .ibtn{width:34px}
+ .play{width:54px}
+ .ev{flex-basis:118px}
+ .ev .t{font-size:17px}
+ .note{font-size:12px}
+ .hint{display:none}
+}
+@media(max-height:760px) and (min-width:561px){
+ .clock{font-size:clamp(64px,10vw,112px)}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body class="enter">
+<!-- THESIS: A day on the island is a shoreline you can drag through. The water is the tide, the sky is the real sun. Not a chart on a form.
+OWN-WORLD: Lamp-room navy deck under a living sky. Sea-glass teal for tide, lamp amber for sun, sand for beach time. Archivo stretched wide for labels, squeezed tall for numbers.
+STORY: Drag the sun. Watch the water climb the beach. Read when and where.
+FIRST VIEWPORT: Full-bleed shore scene with a rolling clock, a tide pole with a gauge riding the waterline, and the day's curve below as the scrub handle.
+FINISH: unreviewed and undocumented is unfinished; the build ends with the finish review and DESIGN.md. -->
+<svg aria-hidden="true" style="position:absolute;width:0;height:0;overflow:hidden"><defs>
+<symbol id="i-sunrise" viewBox="0 0 24 24"><path d="M3 19h18M7.5 19a4.5 4.5 0 0 1 9 0M12 4v5M9.5 6.5 12 4l2.5 2.5M4.6 11.6l1.6 1.6M19.4 11.6l-1.6 1.6"/></symbol>
+<symbol id="i-sunset" viewBox="0 0 24 24"><path d="M3 19h18M7.5 19a4.5 4.5 0 0 1 9 0M12 4v5M9.5 6.5 12 9l2.5-2.5M4.6 11.6l1.6 1.6M19.4 11.6l-1.6 1.6"/></symbol>
+<symbol id="i-high" viewBox="0 0 24 24"><path d="M3 19c2.5-3 4.5 3 7 0s4.5 3 7 0 3-2 4-1.5M12 14V4M8.5 7.5 12 4l3.5 3.5"/></symbol>
+<symbol id="i-low" viewBox="0 0 24 24"><path d="M3 19c2.5-3 4.5 3 7 0s4.5 3 7 0 3-2 4-1.5M12 4v10M8.5 10.5 12 14l3.5-3.5"/></symbol>
+<symbol id="i-beach" viewBox="0 0 24 24"><path d="M12 4a8 8 0 0 1 8 8H4a8 8 0 0 1 8-8zM12 12v8M9 20h6"/></symbol>
+<symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z"/></symbol>
+<symbol id="i-pause" viewBox="0 0 24 24"><path d="M8.5 5v14M15.5 5v14"/></symbol>
+<symbol id="i-left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+<symbol id="i-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="i-cal" viewBox="0 0 24 24"><path d="M4 6h16v14H4zM4 10.5h16M8 3.5v4M16 3.5v4"/></symbol>
+<symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 6.3M20 4v7h-7"/></symbol>
+<symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+<symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v11M7.5 11l4.5 4.5 4.5-4.5M5 20h14"/></symbol>
+<symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12c2.5-3.5 4.5 3.5 7 0s4.5 3.5 7 0 4-2 6-1M2 18c2.5-3.5 4.5 3.5 7 0s4.5 3.5 7 0 4-2 6-1"/></symbol>
+<symbol id="i-flag" viewBox="0 0 24 24"><path d="M6 21V4M6 5h12l-3 4 3 4H6"/></symbol>
+<symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M18.7 5.3l-2.1 2.1M7.4 16.6l-2.1 2.1"/></symbol>
+</defs></svg>
+
+<main class="app" id="app">
+<section class="stage" id="stage" aria-label="Shoreline scene. Drag sideways to move through the day.">
+<canvas id="scene" aria-hidden="true"></canvas>
+<header class="bar">
+<div class="mark"><svg viewBox="0 0 34 34" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13.5 30 15 14h4l1.5 16M14.4 14v-3h5.2v3M17 11V7.5M13.5 7.5h7M9 9.5 3.5 8M25 9.5 30.5 8M11 22h12M12 18h10M9 30h16"/></svg><b>Jekyll Island</b></div>
+<div class="status loading" id="statusPill" role="status"><i class="dot"></i><span id="status">Fetching NOAA tides and sunlight</span><button id="refresh" aria-label="Refresh schedules"><svg class="icon"><use href="#i-refresh"/></svg></button></div>
+<div class="tools">
+<div class="seg" role="group" aria-label="Tide station"><button id="stMarina" data-station="8677832" aria-pressed="true">Marina</button><button id="stSimons" data-station="8677344" aria-pressed="false">St. Simons</button></div>
+<div class="seg" role="group" aria-label="Height units"><button id="feet" aria-pressed="true">ft</button><button id="meters" aria-pressed="false">m</button></div>
+</div>
+</header>
+<div class="readout" id="readout">
+<div class="clock" id="clock" aria-hidden="true"></div>
+<time class="sr" id="clockText"></time>
+<div class="dateline"><span id="dayHeading"></span><span id="daySummary"></span></div>
+<button class="next" id="next" hidden><svg class="icon" id="nextIcon" aria-hidden="true"><use href="#i-high"/></svg><span id="nextText"></span></button>
+</div>
+<div class="gauge" id="gauge" hidden aria-hidden="true"><div class="gv"><span class="gnum" id="gNum">0.0</span><span class="gu" id="gUnit">ft</span></div><div class="gs"><span class="flow slack" id="gFlow"><svg viewBox="0 0 14 32"><path d="m2 7 5-5 5 5M2 13l5-5 5 5M2 19l5-5 5 5"/><path d="m2 25 5-5 5 5M2 31l5-5 5 5" transform="translate(0 -12)"/></svg></span><span id="gWord">Slack</span><span class="est" id="gEst" hidden>est.</span></div></div>
+<div class="veil" id="veil"><div class="veil-card"><h2 id="veilTitle">Reading the tide</h2><p id="veilMsg">Asking NOAA for predictions and Sunrise-Sunset.org for daylight.</p><button class="go" id="veilGo" hidden>Try again</button></div></div>
+<div class="hint" id="hint"><svg viewBox="0 0 30 12" aria-hidden="true"><path d="M2 6h26M6 2 2 6l4 4M24 2l4 4-4 4"/></svg>Drag to move through the day</div>
+</section>
+
+<section class="deck" aria-label="Day, tide and daylight controls">
+<div class="deck-in">
+<div class="dayrow">
+<button class="ibtn" id="prevWin" aria-label="Previous days"><svg class="icon"><use href="#i-left"/></svg></button>
+<div class="days" id="days" role="group" aria-label="Days"></div>
+<button class="ibtn" id="nextWin" aria-label="Next days"><svg class="icon"><use href="#i-right"/></svg></button>
+<button class="today-btn" id="today" hidden>Today</button>
+<div class="calwrap"><button class="ibtn" id="calBtn" aria-label="Choose another date"><svg class="icon"><use href="#i-cal"/></svg></button><label class="sr" for="date">Choose a date</label><input type="date" id="date" tabindex="-1"></div>
+</div>
+<div class="chartwrap" id="chartwrap" role="slider" tabindex="0" aria-label="Time of day" aria-valuemin="0" aria-valuemax="1440" aria-valuenow="720"><div id="chartHost"></div></div>
+<p class="note" id="curveNote"></p>
+<div class="strip">
+<button class="play" id="play" aria-label="Play the day" aria-pressed="false"><svg class="icon fill go"><use href="#i-play"/></svg><svg class="icon pause"><use href="#i-pause"/></svg></button>
+<div class="evs" id="events" aria-label="Sunrise, sunset, tide and beach events"></div>
+</div>
+</div>
+</section>
+</main>
+
+<noscript><p style="padding:24px">This planner needs JavaScript to load tide and sunlight schedules. You can also visit NOAA Tides & Currents directly.</p></noscript>
+
+<section class="sheet" aria-label="Day sheet">
+<div class="sheet-in">
+<div class="card-beach"><h2>Beach time</h2><p id="beachLead">Two-hour windows centered on a predicted low tide, trimmed to daylight.</p><ul class="windows" id="windows"></ul></div>
+<div class="card-moon"><h2>Moon and range</h2><div class="moon-row"><svg id="moonSvg" viewBox="-50 -50 100 100" aria-hidden="true"></svg><div><b id="moonName">Moon</b><span id="moonSub"></span></div></div><p id="moonText"></p></div>
+<div class="card-read"><h2>Reading the shoreline</h2>
+<ul class="legend">
+<li><svg class="icon"><use href="#i-wave"/></svg><span><b>The water line is the tide.</b> It sits at the predicted height on the tide pole. Zero on the pole is MLLW, the average of the lower low tides, so it is not water depth at the beach.</span></li>
+<li><svg class="icon"><use href="#i-flag"/></svg><span><b>Flags mark the next high and low.</b> They stand where that water level lands on the sand. The beach slope is drawn, not surveyed, so read them as a direction and not a distance.</span></li>
+<li><svg class="icon"><use href="#i-high"/></svg><span><b>Waves and specks show the flow.</b> They drift toward the beach while the tide rises, away while it falls, and nearly stop near the turn. This is a visual cue only. NOAA supplies no current speeds here.</span></li>
+<li><svg class="icon"><use href="#i-sun"/></svg><span><b>The sky is the real sun.</b> Sunrise, sunset and civil twilight come from Sunrise-Sunset.org. The moon's place in the sky is illustrative.</span></li>
+</ul></div>
+<div class="card-src src"><h2>Sources</h2>
+<p>Tides: <a id="noaaLink" href="https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=8677832" target="_blank" rel="noopener">NOAA Tides & Currents</a>. The Jekyll Marina station is in Jekyll Creek on the island's west side. NOAA publishes only its high and low predictions there, so the curve between them is a smooth estimate. St. Simons Island, the nearby reference station, has NOAA predictions every six minutes. These are predicted water levels. Wind and weather change what you see.</p>
+<p>Sunlight: <a href="https://sunrise-sunset.org/api" target="_blank" rel="noopener">Sunrise-Sunset.org</a> at 31.07 N, 81.41 W. Every date and time uses America/New_York, including daylight saving time. Schedules are kept while the page is open, and between visits when the browser allows storage. <a href="https://api.tidesandcurrents.noaa.gov/api/prod/" target="_blank" rel="noopener">NOAA API documentation</a>.</p></div>
+<div class="foot"><span>Public data. No account needed.</span><div><button class="pill" id="refresh2"><svg class="icon"><use href="#i-refresh"/></svg>Refresh schedules</button><button class="pill" id="share"><svg class="icon"><use href="#i-link"/></svg>Copy link to this day</button><button class="pill" id="download"><svg class="icon"><use href="#i-download"/></svg>Download this HTML</button></div></div>
+</div>
+</section>
+<div class="toast" role="status" hidden id="toast"></div>
+
+<script>
+'use strict';
+(()=>{
+const SOURCE='<!doctype html>\n'+document.documentElement.outerHTML;
+const ZONE='America/New_York',DAY=86400000,MIN=60000,HOUR=3600000;
+const STATIONS={8677832:{name:'Jekyll Island Marina',short:'Marina',continuous:false},8677344:{name:'St. Simons Island',short:'St. Simons',continuous:true}};
+const $=id=>document.getElementById(id);
+const RM=matchMedia('(prefers-reduced-motion: reduce)');
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const lerp=(a,b,k)=>a+(b-a)*k;
+const smooth=k=>{k=clamp(k,0,1);return k*k*(3-2*k);};
+const fmt=(date,options)=>new Intl.DateTimeFormat('en-US',{timeZone:ZONE,...options}).format(date);
+function dateKey(date){const p=new Intl.DateTimeFormat('en-CA',{timeZone:ZONE,year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date);const v=t=>p.find(x=>x.type===t).value;return `${v('year')}-${v('month')}-${v('day')}`;}
+function addDays(key,n){const d=new Date(`${key}T12:00:00Z`);d.setUTCDate(d.getUTCDate()+n);return d.toISOString().slice(0,10);}
+function validDay(s){return /^\d{4}-\d{2}-\d{2}$/.test(s||'')&&Number.isFinite(Date.parse(`${s}T12:00:00Z`))&&new Date(`${s}T12:00:00Z`).toISOString().slice(0,10)===s&&s>='1900-01-01'&&s<='2100-12-24';}
+function midnight(key){const target=Date.parse(`${key}T00:00:00Z`);let guess=target+4*3600000;for(let i=0;i<3;i++){const parts=new Intl.DateTimeFormat('en-US',{timeZone:ZONE,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',second:'2-digit',hourCycle:'h23'}).formatToParts(guess);const v=t=>parts.find(p=>p.type===t).value;const local=Date.parse(`${v('year')}-${v('month')}-${v('day')}T${v('hour')}:${v('minute')}:${v('second')}Z`);guess+=target-local;}return guess;}
+const time=t=>fmt(t,{hour:'numeric',minute:'2-digit'});
+const shortTime=t=>fmt(t,{hour:'numeric',minute:'2-digit'}).replace(' AM','a').replace(' PM','p');
+const hourLabel=t=>fmt(t,{hour:'numeric'}).replace(' AM','a').replace(' PM','p');
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const icon=(name,cls='')=>`<svg class="icon ${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
+const isHigh=p=>/^H/.test(p.type);
+
+const url=new URL(location.href),today=dateKey(new Date());
+const initial=validDay(url.searchParams.get('date'))?url.searchParams.get('date'):today;
+const requestedSpan=Number(url.searchParams.get('days'));const span=Number.isInteger(requestedSpan)&&requestedSpan>=1&&requestedSpan<=14?requestedSpan:7;
+const requestedAnchor=url.searchParams.get('start');const anchor=validDay(requestedAnchor)&&initial>=requestedAnchor&&initial<=addDays(requestedAnchor,span-1)?requestedAnchor:initial;
+const state={day:initial,anchor,span,station:STATIONS[url.searchParams.get('station')]?url.searchParams.get('station'):'8677832',unit:url.searchParams.get('unit')==='m'?'m':'ft',cursor:initial===today?Date.now():midnight(initial)+12*HOUR,highs:[],samples:[],solar:{},loading:false,version:0,issues:[],cacheStatus:[],domain:{min:-1.5,max:10},playing:false,intro:true};
+
+const unitK=()=>state.unit==='m'?0.3048:1;
+const hnum=v=>(v*unitK()).toFixed(1).replace('-','−');
+const height=v=>`${hnum(v)} ${state.unit}`;
+
+/* ---------- data (unchanged behavior) ---------- */
+function dayData(key=state.day){const start=midnight(key),end=midnight(addDays(key,1));return {start,end,events:state.highs.filter(p=>p.t>=start&&p.t<end),sun:state.solar[key]||null};}
+function points(key=state.day){const {start,end}=dayData(key);if(STATIONS[state.station].continuous)return state.samples.filter(p=>p.t>=start-6*MIN&&p.t<=end+6*MIN);const result=[];for(let t=start;t<=end;t+=6*MIN){const v=tideAt(t);if(v!==null)result.push({t,v});}const v=tideAt(end);if(v!==null&&result.at(-1)?.t!==end)result.push({t:end,v});return result;}
+function tideAt(t){const src=STATIONS[state.station].continuous?state.samples:state.highs;if(src.length<2||t<src[0].t||t>src.at(-1).t)return null;let lo=0,hi=src.length-1;while(hi-lo>1){const mid=(lo+hi)>>1;if(src[mid].t<=t)lo=mid;else hi=mid;}const a=src[lo],b=src[hi],fraction=(t-a.t)/(b.t-a.t);return STATIONS[state.station].continuous?a.v+(b.v-a.v)*fraction:a.v+(b.v-a.v)*(1-Math.cos(Math.PI*fraction))/2;}
+function tideRate(t){const a=tideAt(t-6*MIN),b=tideAt(t+6*MIN);return a===null||b===null?null:(b-a)/(12*MIN/HOUR);}
+function syncUrl(){const u=new URL(location.href);u.searchParams.set('date',state.day);u.searchParams.set('station',state.station);u.searchParams.set('unit',state.unit);u.searchParams.set('days',state.span);u.searchParams.set('start',state.anchor);try{history.replaceState(null,'',u);}catch{}}
+function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,3500);}
+async function getJson(endpoint){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),18000);try{const r=await fetch(endpoint,{signal:controller.signal});if(!r.ok)throw Error(`Source returned ${r.status}`);const data=await r.json();if(data.error||data.status&&data.status!=='OK')throw Error(typeof data.error==='object'?data.error.message:data.message||data.error||data.status);return data;}finally{clearTimeout(timer);}}
+const memoryCache=new Map();
+async function cached(key,endpoint,validate,force=false){const storageKey='jekyll-v1:'+key;let old=memoryCache.get(storageKey)||null;try{old=old||JSON.parse(localStorage.getItem(storageKey)||'null');}catch{}if(!force&&old&&validate(old.data)&&Date.now()-old.at<6*3600000)return {data:old.data,saved:true,at:old.at};try{const data=await getJson(endpoint);if(!validate(data))throw Error('Source returned an incomplete schedule');memoryCache.set(storageKey,{data,at:Date.now()});if(memoryCache.size>30)memoryCache.delete(memoryCache.keys().next().value);try{localStorage.setItem(storageKey,JSON.stringify({data,at:Date.now()}));const keys=Object.keys(localStorage).filter(x=>x.startsWith('jekyll-v1:'));if(keys.length>30){keys.sort((a,b)=>{try{return JSON.parse(localStorage.getItem(a)).at-JSON.parse(localStorage.getItem(b)).at;}catch{return 0;}}).slice(0,keys.length-30).forEach(x=>localStorage.removeItem(x));}}catch{}return {data,saved:false,at:Date.now()};}catch(error){if(old&&validate(old.data))return {data:old.data,saved:true,stale:true,at:old.at};throw error;}}
+function noaaUrl(interval){const p=new URLSearchParams({product:'predictions',application:'JekyllVacationPlanner',begin_date:addDays(state.anchor,-1).replaceAll('-',''),end_date:addDays(state.anchor,state.span+1).replaceAll('-',''),datum:'MLLW',station:state.station,time_zone:'gmt',units:'english',interval,format:'json'});return 'https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?'+p;}
+const validPredictions=d=>Array.isArray(d.predictions)&&d.predictions.length>1&&d.predictions.every(p=>Number.isFinite(Number(p.v))&&Number.isFinite(Date.parse(p.t.replace(' ','T')+':00Z')));
+const parsePredictions=d=>d.predictions.map(p=>({t:Date.parse(p.t.replace(' ','T')+':00Z'),v:Number(p.v),type:p.type})).sort((a,b)=>a.t-b.t);
+
+async function load(force=false){
+ const version=++state.version;state.loading=true;state.highs=[];state.samples=[];state.solar={};state.issues=[];state.cacheStatus=[];
+ const anchor=state.anchor,station=state.station,rangeEnd=addDays(anchor,state.span-1),continuous=STATIONS[station].continuous;
+ setStatus('loading','Fetching NOAA tides and sunlight');$('refresh').disabled=true;$('refresh').classList.add('spin');
+ render();
+ const solarUrl='https://api.sunrise-sunset.org/v2?'+new URLSearchParams({lat:'31.07',lng:'-81.41',date_start:anchor,date_end:rangeEnd,tz:ZONE});
+ const jobs=[['high/low tides',`${station}:${anchor}:${state.span}:hilo`,noaaUrl('hilo'),validPredictions],['sunlight',`sun:${anchor}:${state.span}`,solarUrl,d=>Array.isArray(d.days)&&d.days.length===state.span&&d.days.every(s=>validDay(s.date)&&['sunrise','sunset','civil_twilight_begin','civil_twilight_end'].every(k=>Number.isFinite(Date.parse(s[k]))))]];
+ if(continuous)jobs.push(['tide curve',`${station}:${anchor}:${state.span}:6`,noaaUrl('6'),validPredictions]);
+ const results=await Promise.allSettled(jobs.map(([,key,endpoint,validate])=>cached(key,endpoint,validate,force)));
+ if(version!==state.version)return;
+ results.forEach((r,i)=>{const label=jobs[i][0];if(r.status==='rejected'){state.issues.push(label);console.warn(label,r.reason?.message);return;}const {data,saved,stale,at}=r.value;if(saved)state.cacheStatus.push({label,stale,at});if(label==='high/low tides')state.highs=parsePredictions(data);else if(label==='tide curve')state.samples=parsePredictions(data);else state.solar=Object.fromEntries(data.days.map(s=>[s.date,Object.fromEntries(Object.entries(s).map(([k,v])=>[k,typeof v==='string'&&v.includes('T')?Date.parse(v):v]))]));});
+ state.loading=false;$('refresh').disabled=false;$('refresh').classList.remove('spin');
+ if(state.issues.length)setStatus('problem',`Could not load ${state.issues.join(' or ')}. Check your connection, then refresh.`);
+ else if(state.cacheStatus.some(x=>x.stale))setStatus('problem','A source is unavailable. Showing saved schedules.');
+ else setStatus('ok',state.cacheStatus.length?'NOAA and Sunrise-Sunset.org, saved copy':'Live from NOAA and Sunrise-Sunset.org');
+ computeDomain();render();
+ if(state.intro&&!state.issues.length)startIntro();
+ state.intro=false;
+}
+function setStatus(kind,text){$('statusPill').className='status '+(kind==='ok'?'':kind);$('status').textContent=text;}
+function computeDomain(){const vs=(STATIONS[state.station].continuous?state.samples:state.highs).map(p=>p.v);state.domain={min:Math.min(-1.5,vs.length?Math.min(...vs)-.6:-1.5),max:Math.max(10,vs.length?Math.max(...vs)+1:10)};}
+
+/* ---------- day model ---------- */
+function dayEvents(key=state.day){const d=dayData(key),ev=d.events.map(p=>({t:p.t,kind:isHigh(p)?'high':'low',v:p.v}));if(d.sun)ev.push({t:d.sun.sunrise,kind:'sunrise'},{t:d.sun.sunset,kind:'sunset'});return ev.sort((a,b)=>a.t-b.t);}
+function beachWindows(key=state.day){const d=dayData(key);if(!d.sun)return[];return d.events.filter(p=>!isHigh(p)).map(p=>({low:p,from:Math.max(p.t-60*MIN,d.sun.sunrise),to:Math.min(p.t+60*MIN,d.sun.sunset)})).filter(w=>w.from<w.to);}
+const EVNAME={sunrise:'Sunrise',sunset:'Sunset',high:'High tide',low:'Low tide',beach:'Beach window'};
+function nextEvent(t=state.cursor){return dayEvents().find(e=>e.t>t+MIN)||null;}
+function untilText(ms){const m=Math.round(ms/MIN),h=Math.floor(m/60);return h?`${h}h ${m%60}m`:`${m}m`;}
+function dayBounds(){const d=dayData();return {start:d.start,end:d.end,len:d.end-d.start};}
+
+/* ---------- moon (calculated, not fetched) ---------- */
+const SYN=29.530588853,NEW0=Date.UTC(2000,0,6,18,14);
+function moonInfo(t){let p=((t-NEW0)/DAY/SYN)%1;if(p<0)p+=1;const names=[[.03,'New moon'],[.22,'Waxing crescent'],[.28,'First quarter'],[.47,'Waxing gibbous'],[.53,'Full moon'],[.72,'Waning gibbous'],[.78,'Last quarter'],[.97,'Waning crescent'],[1.01,'New moon']];return {p,illum:(1-Math.cos(2*Math.PI*p))/2,name:names.find(n=>p<n[0])[1],spring:Math.cos(4*Math.PI*p)};}
+function moonPath(r,p){const q=p>.5?1-p:p,k=Math.cos(2*Math.PI*q);return {k,flip:p>.5};}
+
+/* ---------- sky palette from the real sun ---------- */
+const C=h=>[1,3,5].map(i=>parseInt(h.slice(i,i+2),16));
+const KEYS=['top','mid','hor','cloud','seaS','seaD','sand','sandD','grass'];
+const mkStop=(L,m,e)=>({L,m:Object.fromEntries(KEYS.map((k,i)=>[k,C(m[i])])),e:Object.fromEntries(KEYS.map((k,i)=>[k,C((e||m)[i])]))});
+const STOPS=[
+ mkStop(-1,['#04071a','#0a1236','#182a5c','#2a3866','#124068','#030e22','#39426a','#141a36','#17262e']),
+ mkStop(-.3,['#151a50','#4a3a84','#c4708f','#8a6a9a','#2b4f86','#081a3e','#7d6f94','#342f5a','#26333f'],['#1a1850','#5c2f7a','#e2607a','#a8587e','#3a4a86','#0c1a40','#8a6a8a','#3a2f58','#2a3040']),
+ mkStop(0,['#2a3a80','#aa6290','#ffb470','#ffb3a0','#5f95b8','#0f4468','#e0b09a','#8f6a74','#4a5a40'],['#282c74','#bf5078','#ff8840','#ff9a7a','#7a86b0','#123a66','#e8a47a','#9a6060','#4a5238']),
+ mkStop(.35,['#2c64a8','#8fa6c8','#ffd9a0','#ffe6cc','#4fb3c0','#0c5878','#f0d4a4','#b99468','#6c8250'],['#2c62a4','#bda0b4','#ffc882','#ffdcb8','#52aab8','#0e4f72','#f2c898','#b68a62','#6c7c4c']),
+ mkStop(1,['#1d6cae','#4a98d0','#c4e6f4','#ffffff','#46c6c4','#08506f','#ecd6a8','#c3a56e','#62803e'])
+];
+const mix=(a,b,k)=>[lerp(a[0],b[0],k),lerp(a[1],b[1],k),lerp(a[2],b[2],k)];
+const rgb=(c,a=1)=>a>=1?`rgb(${c[0]|0},${c[1]|0},${c[2]|0})`:`rgba(${c[0]|0},${c[1]|0},${c[2]|0},${a})`;
+function palette(L,morning){let i=0;while(i<STOPS.length-2&&L>STOPS[i+1].L)i++;const a=STOPS[i],b=STOPS[i+1],k=smooth((L-a.L)/(b.L-a.L)),side=morning?'m':'e',out={};for(const key of KEYS)out[key]=mix(a[side][key],b[side][key],k);return out;}
+function lightAt(t,s){const gold=60*MIN,nb=s.civil_twilight_begin,ne=s.civil_twilight_end,sr=s.sunrise,ss=s.sunset;
+ if(t<=nb-30*MIN)return -1;if(t<nb)return -1+.7*smooth((t-nb+30*MIN)/(30*MIN));if(t<sr)return -.3+.3*smooth((t-nb)/(sr-nb));
+ if(t<sr+gold)return .35*smooth((t-sr)/gold);if(t<sr+2*gold)return .35+.65*smooth((t-sr-gold)/gold);
+ if(t<=ss-2*gold)return 1;if(t<ss-gold)return .35+.65*smooth((ss-gold-t)/gold);if(t<ss)return .35*smooth((ss-t)/gold);
+ if(t<ne)return -.3*smooth((t-ss)/(ne-ss));if(t<ne+30*MIN)return -.3-.7*smooth((t-ne)/(30*MIN));return -1;}
+
+/* ---------- terrain: seabed, beach, dune ---------- */
+const CP=[[0,-7],[.12,-6],[.28,-4],[.4,-1.7],[.47,-.2],[.56,1.8],[.66,4.4],[.75,7.2],[.81,9.6],[.86,12.2],[.92,13.1],[.97,12.5],[1,12.9]];
+const cx=CP.map(p=>p[0]),cy=CP.map(p=>p[1]),nCP=CP.length,dk=[],slope=[];
+for(let i=0;i<nCP-1;i++)dk[i]=(cy[i+1]-cy[i])/(cx[i+1]-cx[i]);
+slope[0]=dk[0];slope[nCP-1]=dk[nCP-2];for(let i=1;i<nCP-1;i++)slope[i]=dk[i-1]*dk[i]<=0?0:(dk[i-1]+dk[i])/2;
+for(let i=0;i<nCP-1;i++){if(dk[i]===0){slope[i]=slope[i+1]=0;}else{const a=slope[i]/dk[i],b=slope[i+1]/dk[i],s=a*a+b*b;if(s>9){const t=3/Math.sqrt(s);slope[i]=t*a*dk[i];slope[i+1]=t*b*dk[i];}}}
+function elev(u){u=clamp(u,0,1);let i=nCP-2;for(let j=0;j<nCP-1;j++)if(u<=cx[j+1]){i=j;break;}const h=cx[i+1]-cx[i],t=(u-cx[i])/h,t2=t*t,t3=t2*t;return (2*t3-3*t2+1)*cy[i]+(t3-2*t2+t)*h*slope[i]+(-2*t3+3*t2)*cy[i+1]+(t3-t2)*h*slope[i+1];}
+function uAt(level){let lo=0,hi=.92;for(let i=0;i<22;i++){const mid=(lo+hi)/2;if(elev(mid)<level)lo=mid;else hi=mid;}return (lo+hi)/2;}
+
+/* ---------- scene ---------- */
+const canvas=$('scene'),ctx=canvas.getContext('2d');
+let W=0,H=0,SH=0,dpr=1,terrainPath=null;
+const rnd=(()=>{let s=7;return()=>{s=(s*16807)%2147483647;return (s-1)/2147483646;};})();
+const stars=Array.from({length:150},()=>({x:rnd(),y:rnd()*.62,r:.5+rnd()*1.3,ph:.6+rnd()*2.4,o:rnd()}));
+const clouds=Array.from({length:6},(_,i)=>({x:rnd(),y:.07+rnd()*.2,s:.5+rnd()*.9,v:4+rnd()*7,blobs:Array.from({length:6},(_,j)=>({dx:(j-2.5)*.55+(rnd()-.5)*.3,dy:(rnd()-.5)*.35,r:.55+rnd()*.5}))}));
+const motes=Array.from({length:80},()=>({x:rnd(),d:rnd(),r:.6+rnd()*1.6,w:rnd()*6}));
+const grain=(()=>{const c=document.createElement('canvas');c.width=c.height=128;const g=c.getContext('2d'),img=g.createImageData(128,128);for(let i=0;i<img.data.length;i+=4){const v=rnd()*255;img.data[i]=img.data[i+1]=img.data[i+2]=v;img.data[i+3]=255;}g.putImageData(img,0,0);return c;})();
+let grainPattern=null;
+const view={level:null,flow:0,wet:null,wavePhase:0,last:performance.now(),has:false,fin:{next:12,t:-1,x:0,dir:1}};
+const yOf=ft=>SH*.4+(state.domain.max-ft)/(state.domain.max-state.domain.min)*SH*.46;
+function resizeScene(){const r=$('stage').getBoundingClientRect();dpr=Math.min(2,window.devicePixelRatio||1);W=r.width;H=r.height;SH=H-30;canvas.width=Math.round(W*dpr);canvas.height=Math.round(H*dpr);buildTerrain();grainPattern=ctx.createPattern(grain,'repeat');}
+function buildTerrain(){terrainPath=new Path2D();const n=240;terrainPath.moveTo(0,H+60);for(let i=0;i<=n;i++){const u=i/n;terrainPath.lineTo(u*W,yOf(elev(u)));}terrainPath.lineTo(W,H+60);terrainPath.closePath();}
+const terrainY=x=>yOf(elev(x/W));
+
+function drawScene(now){
+ if(!W)return;
+ const ts=RM.matches?0:now/1000,t=state.cursor,sun=state.solar[state.day]||null;
+ const L=sun?lightAt(t,sun):.2,morning=sun?t<(sun.sunrise+sun.sunset)/2:true,P=palette(L,morning);
+ const level=view.level,hy=yOf(level),dayK=clamp(L,0,1),nightK=clamp((-L-.15)/.6,0,1);
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,H);
+ /* sky */
+ const sg=ctx.createLinearGradient(0,0,0,hy+SH*.08);sg.addColorStop(0,rgb(P.top));sg.addColorStop(.55,rgb(P.mid));sg.addColorStop(1,rgb(P.hor));ctx.fillStyle=sg;ctx.fillRect(0,0,W,H);
+ /* stars */
+ if(nightK>.01){ctx.fillStyle='#fff';for(const s of stars){const a=nightK*(.45+.55*Math.sin(ts*s.ph+s.o*9))*(1-s.y*.7);if(a<=.02)continue;ctx.globalAlpha=a;ctx.beginPath();ctx.arc(s.x*W,s.y*SH,s.r,0,6.283);ctx.fill();}ctx.globalAlpha=1;}
+ /* sun and moon */
+ let sunPos=null;
+ const skyline=x=>Math.min(terrainY(x),hy);
+ const arc=(f,span)=>{const x=lerp(.12,.84,f)*W,a=Math.sin(Math.PI*f),base=skyline(x);const y=a<0?base-a*SH*.34:lerp(base-a*SH*.34,SH*.5-a*SH*.38,smooth(a/.55));return {x,y,a};};
+ if(sun){
+  const f=(t-sun.sunrise)/(sun.sunset-sun.sunrise),p=arc(f);sunPos=p;
+  if(p.a>-.1){
+   const fade=clamp((p.a+.1)/.1,0,1),low=1-clamp(p.a/.3,0,1),col=mix([255,247,218],[255,150,60],low),R=clamp(SH*.05,16,30)*(1+low*.3);
+   ctx.globalCompositeOperation='lighter';
+   const halo=ctx.createRadialGradient(p.x,p.y,R*.4,p.x,p.y,SH*(.3+low*.25));halo.addColorStop(0,rgb(col,(.5+low*.15)*fade));halo.addColorStop(.35,rgb(col,.16*fade));halo.addColorStop(1,rgb(col,0));ctx.fillStyle=halo;ctx.fillRect(0,0,W,H);
+   if(low>.05){ctx.save();ctx.translate(p.x,p.y);ctx.rotate(ts*.04);for(let i=0;i<9;i++){ctx.rotate(.7);const rg=ctx.createLinearGradient(0,0,SH*.9,0);rg.addColorStop(0,rgb(col,.2*low*fade));rg.addColorStop(1,rgb(col,0));ctx.fillStyle=rg;ctx.beginPath();ctx.moveTo(0,0);ctx.lineTo(SH*.9,-SH*.05*(1+(i%3)*.4));ctx.lineTo(SH*.9,SH*.05*(1+(i%3)*.4));ctx.fill();}ctx.restore();}
+   ctx.globalCompositeOperation='source-over';
+   const disc=ctx.createRadialGradient(p.x,p.y,0,p.x,p.y,R);disc.addColorStop(0,rgb([255,255,240],fade));disc.addColorStop(.8,rgb(col,fade));disc.addColorStop(1,rgb(col,.0));ctx.fillStyle=disc;ctx.beginPath();ctx.arc(p.x,p.y,R,0,6.283);ctx.fill();
+  }
+  /* moon, placed by phase: a full moon rises as the sun sets */
+  const mi=moonInfo(t),noon=(sun.sunrise+sun.sunset)/2,half=6.2*HOUR;let mf=null;for(const k of [-1,0]){const transit=noon+mi.p*24.84*HOUR+k*24.84*HOUR,f2=(t-(transit-half))/(2*half);if(f2>-.35&&f2<1.35&&(mf===null||Math.abs(f2-.5)<Math.abs(mf-.5)))mf=f2;}
+  if(mf!==null){const m=arc(mf);if(m.a>-.12&&mi.illum>.03){const R=clamp(SH*.04,13,24),ma=clamp((m.a+.12)/.15,0,1)*(.28+.72*(1-dayK));
+   ctx.save();ctx.translate(m.x,m.y);ctx.globalAlpha=ma;
+   const mg=ctx.createRadialGradient(0,0,R*.6,0,0,R*3);mg.addColorStop(0,'rgba(200,220,255,.2)');mg.addColorStop(1,'rgba(200,220,255,0)');ctx.globalCompositeOperation='lighter';ctx.fillStyle=mg;ctx.beginPath();ctx.arc(0,0,R*3,0,6.283);ctx.fill();ctx.globalCompositeOperation='source-over';
+   ctx.fillStyle='rgba(120,135,170,.38)';ctx.beginPath();ctx.arc(0,0,R,0,6.283);ctx.fill();
+   const mp=moonPath(R,mi.p);if(mp.flip)ctx.scale(-1,1);ctx.fillStyle='#f3f1e4';ctx.beginPath();ctx.moveTo(0,-R);ctx.arc(0,0,R,-Math.PI/2,Math.PI/2,false);ctx.ellipse(0,0,Math.abs(mp.k)*R,R,0,Math.PI/2,-Math.PI/2,mp.k>0);ctx.closePath();ctx.fill();ctx.restore();}}
+ }
+ /* clouds */
+ const cloudA=.2+.5*dayK+.15*(1-nightK);
+ for(const c of clouds){const x=((c.x*W*1.4+ts*c.v)%(W*1.5))-W*.25,y=c.y*SH,sz=SH*.1*c.s;for(const b of c.blobs){const bx=x+b.dx*sz*1.6,by=y+b.dy*sz,br=b.r*sz;const cg=ctx.createRadialGradient(bx,by,0,bx,by,br);cg.addColorStop(0,rgb(P.cloud,cloudA*.55));cg.addColorStop(1,rgb(P.cloud,0));ctx.fillStyle=cg;ctx.fillRect(bx-br,by-br,br*2,br*2);}}
+ /* far water band */
+ const xs=uAt(level)*W,flow=view.flow,speed=flow*1.15,amp=RM.matches?1.5:2.2+Math.min(5,Math.abs(flow)*2.2);
+ if(!RM.matches)view.wavePhase+=speed*(1/60);
+ const ph=view.wavePhase,idle=ts*.8;
+ const surf=(x,k)=>{const taper=1-.85*smooth((x-(xs-90))/90);return hy+taper*amp*(Math.sin(x*.012-ph*k+idle*.3)+.5*Math.sin(x*.029-ph*1.7*k+idle)+.7*Math.sin(x*.0055-ph*.6*k));};
+ const seaS=mix(P.seaS,P.hor,.22+.2*(1-dayK));
+ ctx.beginPath();ctx.moveTo(0,hy-10);for(let x=0;x<=xs+6;x+=8)ctx.lineTo(x,surf(x,.7)-9+Math.sin(x*.02+idle*.5)*1.4);for(let x=xs+6;x>=0;x-=16)ctx.lineTo(x,surf(x,1));ctx.closePath();
+ ctx.fillStyle=rgb(mix(seaS,P.hor,.35),.8);ctx.fill();
+ /* terrain */
+ const tg=ctx.createLinearGradient(0,yOf(13),0,H);tg.addColorStop(0,rgb(P.sand));tg.addColorStop(1,rgb(P.sandD));ctx.fillStyle=tg;ctx.fill(terrainPath);
+ if(grainPattern){ctx.save();ctx.clip(terrainPath);ctx.globalAlpha=.1;ctx.fillStyle=grainPattern;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;
+  const shade=ctx.createLinearGradient(W*.45,0,W,0);shade.addColorStop(0,'rgba(0,0,0,0)');shade.addColorStop(1,rgb(mix(P.sandD,[10,10,30],.45),.5));ctx.fillStyle=shade;ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle=rgb(P.sandD,.2);ctx.lineWidth=1.4;for(let k=1;k<=9;k++){ctx.beginPath();for(let i=0;i<=60;i++){const u=.4+i/60*.5;ctx.lineTo(u*W,yOf(elev(u))+k*SH*.032+Math.sin(u*38+k*1.7)*2.2);}ctx.stroke();}ctx.restore();}
+ /* wet sand */
+ const wet=view.wet;if(wet>level+.02){const u1=uAt(level),u2=uAt(wet);ctx.beginPath();for(let i=0;i<=24;i++){const u=lerp(u1,u2,i/24);ctx.lineTo(u*W,yOf(elev(u)));}for(let i=24;i>=0;i--){const u=lerp(u1,u2,i/24);ctx.lineTo(u*W+3,yOf(elev(u))+11);}ctx.closePath();ctx.fillStyle=rgb(P.sandD,.32);ctx.fill();}
+ /* water body */
+ ctx.beginPath();for(let x=0;x<=xs;x+=6)ctx.lineTo(x,surf(x,1));ctx.lineTo(xs,hy);for(let x=xs;x>=0;x-=6)ctx.lineTo(x,terrainY(x));ctx.closePath();
+ const wg=ctx.createLinearGradient(0,hy-20,0,Math.max(H,hy+SH*.5));wg.addColorStop(0,rgb(seaS,.86));wg.addColorStop(.5,rgb(mix(seaS,P.seaD,.55),.93));wg.addColorStop(1,rgb(P.seaD,.97));
+ ctx.save();ctx.fillStyle=wg;ctx.fill();ctx.clip();
+ /* light shafts and sparkle under the sun */
+ if(sunPos&&sunPos.a>0){const k=clamp(sunPos.a*2.5,0,1)*(.5+.5*dayK);ctx.globalCompositeOperation='lighter';for(let i=0;i<7;i++){const bx=sunPos.x+(i-3)*SH*.07+Math.sin(ts*.4+i*1.7)*14,w=10+((i*7)%5)*5;const sh=ctx.createLinearGradient(0,hy,0,hy+SH*.5);sh.addColorStop(0,`rgba(255,240,200,${.17*k})`);sh.addColorStop(1,'rgba(255,240,200,0)');ctx.fillStyle=sh;ctx.beginPath();ctx.moveTo(bx-w*.4,hy);ctx.lineTo(bx+w*.4,hy);ctx.lineTo(bx+w*2.2+(i-3)*10,hy+SH*.5);ctx.lineTo(bx-w*1.6+(i-3)*10,hy+SH*.5);ctx.fill();}ctx.globalCompositeOperation='source-over';}
+ /* drifting specks: flow direction */
+ ctx.fillStyle='rgba(235,255,250,.5)';
+ for(const m of motes){if(!RM.matches)m.x+=(flow*.012+Math.sin(ts*.5+m.w)*.0004)*(1/60);if(m.x>xs/W)m.x=0;else if(m.x<0)m.x=xs/W;const px=m.x*W,ty=terrainY(px),sy=surf(px,1);if(ty-sy<8)continue;const py=sy+6+m.d*(ty-sy-10);ctx.globalAlpha=.18+.3*dayK*.6+.1;ctx.beginPath();ctx.arc(px,py,m.r,0,6.283);ctx.fill();}
+ ctx.globalAlpha=1;ctx.restore();
+ /* surface line, crest glints, sun glitter */
+ ctx.beginPath();for(let x=0;x<=xs;x+=5)x?ctx.lineTo(x,surf(x,1)):ctx.moveTo(x,surf(x,1));ctx.strokeStyle=`rgba(255,255,255,${.3+.25*dayK})`;ctx.lineWidth=1.6;ctx.stroke();
+ if(sunPos&&sunPos.a>-.03){ctx.globalCompositeOperation='lighter';const g=clamp(sunPos.a*4+.3,0,1);for(let i=0;i<46;i++){const gx=sunPos.x+(((i*97)%100)/100-.5)*SH*.55*(1.2-g*.4);if(gx>xs-8||gx<0)continue;const gy=surf(gx,1)+((i*13)%7)*1.6+1,fl=.5+.5*Math.sin(ts*(2+i%5)+i*3.1);ctx.fillStyle=`rgba(255,235,190,${fl*.7*g*(1-Math.abs(gx-sunPos.x)/(SH*.3))})`;ctx.fillRect(gx-5-(i%4)*2,gy,10+(i%4)*4,1.6);}ctx.globalCompositeOperation='source-over';}
+ /* swash and foam at the waterline */
+ {const sw=.22*(.5+.5*Math.sin(ts*.9)),u1=uAt(level-.1),u2=uAt(level+sw);ctx.beginPath();for(let i=0;i<=16;i++){const u=lerp(u1,u2,i/16);ctx.lineTo(u*W,yOf(elev(u))-1);}ctx.strokeStyle=`rgba(255,255,255,${.55+.3*dayK})`;ctx.lineWidth=3.2;ctx.lineCap='round';ctx.stroke();ctx.setLineDash([2,7]);ctx.lineWidth=2;ctx.beginPath();for(let i=0;i<=16;i++){const u=lerp(u2,uAt(level+sw+.35),i/16);ctx.lineTo(u*W,yOf(elev(u))-1);}ctx.strokeStyle='rgba(255,255,255,.4)';ctx.stroke();ctx.setLineDash([]);}
+ drawGaugeAndFlags(now,P,hy,xs,dayK,surf);
+ drawDune(ts,P,L,nightK);
+ /* dolphin fin */
+ if(!RM.matches&&sun&&dayK>.2&&view.has)drawFin(ts,surf,xs,dayK);
+ /* text scrim */
+ const sc=ctx.createLinearGradient(0,0,0,SH*.55);sc.addColorStop(0,'rgba(2,8,28,.3)');sc.addColorStop(1,'rgba(2,8,28,0)');ctx.fillStyle=sc;ctx.fillRect(0,0,W,SH*.55);
+ const sl=ctx.createLinearGradient(0,0,W*.6,0);sl.addColorStop(0,'rgba(2,8,28,.18)');sl.addColorStop(1,'rgba(2,8,28,0)');ctx.fillStyle=sl;ctx.fillRect(0,0,W*.6,SH*.7);
+ /* night dimming of the land */
+ if(!view.has){ctx.fillStyle='rgba(6,14,34,.35)';ctx.fillRect(0,0,W,H);}
+ if(grainPattern){ctx.globalAlpha=.045;ctx.fillStyle=grainPattern;ctx.fillRect(0,0,W,H);ctx.globalAlpha=1;}
+}
+
+function drawFin(ts,surf,xs,dayK){const f=view.fin;if(f.t<0){if(ts>f.next){f.t=0;f.x=W*(.1+Math.random()*.1);f.dir=1;}else return;}f.t+=1/60;const dur=7;if(f.t>dur){f.t=-1;f.next=ts+30+Math.random()*40;return;}const k=f.t/dur,x=f.x+k*Math.min(xs*.55,W*.4),a=Math.sin(Math.PI*k);if(x>xs-30)return;const y=surf(x,1);ctx.save();ctx.translate(x,y);ctx.globalAlpha=a*.95;ctx.fillStyle='rgba(18,34,48,.95)';ctx.beginPath();ctx.moveTo(-11,1);ctx.quadraticCurveTo(-3,-3,-1,-17);ctx.quadraticCurveTo(5,-6,13,1);ctx.closePath();ctx.fill();ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1.4;ctx.beginPath();ctx.moveTo(-16,2);ctx.lineTo(-48,5);ctx.moveTo(18,2);ctx.lineTo(26,4);ctx.stroke();ctx.restore();}
+
+function drawDune(ts,P,L,nightK){
+ const lit=smooth((L+.35)/.7),grass=rgb(P.grass),sway=RM.matches?0:Math.sin(ts*1.3);
+ ctx.strokeStyle=grass;ctx.lineWidth=1.6;ctx.lineCap='round';
+ for(let i=0;i<22;i++){const u=.83+i*.0075+((i*37)%5)*.002,x=u*W,y=yOf(elev(u))+2,h=SH*(.03+((i*13)%6)*.005);ctx.beginPath();for(let b=-1;b<=1;b++){ctx.moveTo(x+b*3,y);ctx.quadraticCurveTo(x+b*3+b*4+sway*3,y-h*.6,x+b*9+sway*(5+b),y-h);}ctx.stroke();}
+ /* lighthouse */
+ const bu=.915,bx=bu*W,by=yOf(elev(bu))+3,th=clamp(SH*.24,64,150),bw=clamp(W*.02,11,22),tw=bw*.62;
+ const wall=mix([210,214,226],P.sand,.25),shade=mix(wall,P.sandD,.4+.3*(1-lit)),wallLit=mix(shade,wall,.35+.65*lit);
+ ctx.fillStyle=rgb(wallLit);ctx.beginPath();ctx.moveTo(bx-bw,by);ctx.lineTo(bx-tw,by-th);ctx.lineTo(bx+tw,by-th);ctx.lineTo(bx+bw,by);ctx.closePath();ctx.fill();
+ ctx.fillStyle=rgb(mix(P.sandD,[30,30,50],.6),.9);for(const k of [.3,.62]){const y0=by-th*k,w0=lerp(bw,tw,k);ctx.fillRect(bx-w0,y0-th*.07,w0*2,th*.07);}
+ ctx.fillStyle='rgb(26,30,44)';ctx.fillRect(bx-tw-4,by-th-4,(tw+4)*2,5);
+ const lampY=by-th-14,lampOn=1-smooth((L+.1)/.25);
+ ctx.fillStyle=lampOn>.05?`rgb(${255},${200+55*(1-lampOn)|0},${120+100*(1-lampOn)|0})`:'rgb(120,150,170)';ctx.fillRect(bx-tw+1,lampY,(tw-1)*2,11);
+ ctx.fillStyle='rgb(26,30,44)';ctx.beginPath();ctx.moveTo(bx-tw-2,lampY);ctx.lineTo(bx,lampY-10);ctx.lineTo(bx+tw+2,lampY);ctx.closePath();ctx.fill();
+ if(lampOn>.03){ctx.globalCompositeOperation='lighter';const g=ctx.createRadialGradient(bx,lampY+5,0,bx,lampY+5,SH*.16);g.addColorStop(0,`rgba(255,215,140,${.8*lampOn})`);g.addColorStop(1,'rgba(255,215,140,0)');ctx.fillStyle=g;ctx.fillRect(bx-SH*.2,lampY-SH*.2,SH*.4,SH*.4);
+  const th2=ts*1.05,dx=Math.cos(th2),len=Math.abs(dx)*W*.8+W*.05,dir=dx>0?1:-1;if(Math.abs(dx)>.04){const bg=ctx.createLinearGradient(bx,0,bx+dir*len,0);bg.addColorStop(0,`rgba(255,226,160,${.38*lampOn})`);bg.addColorStop(1,'rgba(255,226,160,0)');ctx.fillStyle=bg;ctx.beginPath();ctx.moveTo(bx,lampY+5);ctx.lineTo(bx+dir*len,lampY+5-len*.05-4);ctx.lineTo(bx+dir*len,lampY+5+len*.05+4);ctx.fill();}
+  ctx.globalCompositeOperation='source-over';}
+}
+
+/* tide pole, and flags where the next high and low reach the sand */
+function drawGaugeAndFlags(now,P,hy,xs,dayK,surf){
+ const sx=clamp(W*.36,112,560),w=14,top=yOf(state.domain.max-.2),step=state.unit==='m'?1/0.3048:2,minor=step/2;
+ const pole=(under)=>{ctx.save();ctx.beginPath();if(under)ctx.rect(sx-30,hy,90,H);else ctx.rect(sx-30,0,90,hy);ctx.clip();ctx.globalAlpha=under?.55:1;
+  ctx.fillStyle='rgb(18,26,38)';ctx.fillRect(sx-w/2,top,w,H);ctx.fillStyle='rgba(255,255,255,.12)';ctx.fillRect(sx-w/2,top,3,H);
+  const lo=Math.ceil(state.domain.min/minor)*minor;ctx.font='700 11px Archivo,sans-serif';ctx.textBaseline='middle';
+  for(let v=lo;v<=state.domain.max;v+=minor){const y=yOf(v),major=Math.abs(v/step-Math.round(v/step))<1e-6;ctx.fillStyle=major?'#f1fbfa':'rgba(241,251,250,.7)';ctx.fillRect(sx-w/2,y-1,major?w:w*.55,2);if(major){ctx.fillStyle='#f1fbfa';ctx.textAlign='left';ctx.fillText((v*unitK()).toFixed(0).replace('-','−'),sx+w/2+5,y);}}
+  ctx.fillStyle='rgb(18,26,38)';ctx.fillRect(sx-w/2-2,top-4,w+4,5);ctx.restore();};
+ pole(false);pole(true);
+ /* flags for the next high and next low */
+ const src=state.highs.filter(p=>p.t>state.cursor-MIN);const nh=src.find(isHigh),nl=src.find(p=>!isHigh(p));
+ const flags=[nh,nl].filter(Boolean).filter(p=>p.v<elev(.9)).map(p=>({p,x:uAt(p.v)*W,y:yOf(p.v)})).sort((a,b)=>a.x-b.x);
+ let lastRight=-1e9;
+ for(const fl of flags){const high=isHigh(fl.p),label=`${high?'High':'Low'} ${shortTime(fl.p.t)}`;ctx.font='700 11.5px Archivo,sans-serif';const tw=ctx.measureText(label).width+16;
+  const lift=fl.x<lastRight+tw*.5?44:26;ctx.setLineDash([3,6]);ctx.strokeStyle='rgba(255,255,255,.45)';ctx.lineWidth=1.2;ctx.beginPath();ctx.moveTo(sx+w/2,fl.y);ctx.lineTo(fl.x,fl.y);ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle='rgb(18,26,38)';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(fl.x,fl.y+2);ctx.lineTo(fl.x,fl.y-lift);ctx.stroke();
+  const bx=clamp(fl.x+2,4,W-tw-4),by=fl.y-lift-18;ctx.fillStyle=high?'rgba(8,40,52,.92)':'rgba(46,34,8,.92)';ctx.beginPath();ctx.roundRect(bx,by,tw,20,6);ctx.fill();ctx.fillStyle=high?'#62e3d3':'#ffcf6b';ctx.textAlign='left';ctx.textBaseline='middle';ctx.fillText(label,bx+8,by+10.5);
+  ctx.fillStyle=high?'#62e3d3':'#ffcf6b';ctx.beginPath();ctx.arc(fl.x,fl.y,3.2,0,6.283);ctx.fill();lastRight=bx+tw;}
+}
+
+/* ---------- gauge tag + clock reels ---------- */
+const reels={};
+(function buildClock(){const make=(items,cls='')=>{const r=document.createElement('span');r.className='reel '+cls;const s=document.createElement('span');s.className='strip';s.innerHTML=items.map(x=>`<i>${x}</i>`).join('');r.appendChild(s);return {el:r,strip:s};};
+ const clock=$('clock');reels.h1=make(['','1'],'blank');reels.h2=make([0,1,2,3,4,5,6,7,8,9]);reels.m1=make([0,1,2,3,4,5]);reels.m2=make([0,1,2,3,4,5,6,7,8,9]);reels.ap=make(['AM','PM']);
+ const colon=document.createElement('span');colon.className='colon';colon.textContent=':';const ap=document.createElement('span');ap.className='ampm';
+ clock.append(reels.h1.el,reels.h2.el,colon,reels.m1.el,reels.m2.el);ap.appendChild(reels.ap.el);clock.appendChild(ap);})();
+let lastMinuteKey=-1;
+function setClock(t){const key=Math.floor(t/MIN);if(key===lastMinuteKey)return;lastMinuteKey=key;const p=new Intl.DateTimeFormat('en-US',{timeZone:ZONE,hour:'numeric',minute:'2-digit',hourCycle:'h12'}).formatToParts(t),v=n=>p.find(x=>x.type===n).value,h=Number(v('hour')),m=v('minute').padStart(2,'0');
+ reels.h1.strip.style.setProperty('--i',h>=10?1:0);reels.h2.strip.style.setProperty('--i',h%10);reels.m1.strip.style.setProperty('--i',Number(m[0]));reels.m2.strip.style.setProperty('--i',Number(m[1]));reels.ap.strip.style.setProperty('--i',v('dayPeriod').toUpperCase()==='PM'?1:0);
+ $('clockText').textContent=time(t);$('clockText').dateTime=new Date(t).toISOString();
+ const cw=$('chartwrap'),d=dayBounds(),v2=tideAt(t),r=tideRate(t);cw.setAttribute('aria-valuenow',Math.round((t-d.start)/MIN));cw.setAttribute('aria-valuemax',Math.round(d.len/MIN));
+ cw.setAttribute('aria-valuetext',`${time(t)}${v2===null?'':', '+height(v2)+(r===null?'':r>.05?', rising':r<-.05?', falling':', near slack')}`);}
+function flowWord(r){return r===null?'':r>.12?'Rising':r<-.12?'Falling':'Slack';}
+
+function updateReadout(){
+ const t=state.cursor;setClock(t);
+ const g=$('gauge');
+ if(!view.has||view.level===null){g.hidden=true;return;}
+ g.hidden=false;
+ const est=!STATIONS[state.station].continuous;
+ const num=hnum(view.level);if($('gNum').textContent!==num)$('gNum').textContent=num;
+ const frac=clamp((view.level-state.domain.min)/(state.domain.max-state.domain.min),0,1);$('gNum').style.fontStretch=`${(62+55*frac).toFixed(0)}%`;
+ const r=view.flow,word=flowWord(r),cls=word==='Rising'?'up':word==='Falling'?'down':'slack';
+ if($('gWord').textContent!==word)$('gWord').textContent=word;if($('gFlow').dataset.s!==cls){$('gFlow').dataset.s=cls;$('gFlow').className='flow '+cls;}
+ $('gUnit').textContent=state.unit;$('gEst').hidden=!est;
+ const sx=clamp(W*.36,112,560),hy=yOf(view.level),gh=g.offsetHeight||70,below=hy+14+gh<H-34;
+ g.style.transform=`translate3d(${(sx+22).toFixed(1)}px,${(below?hy+14:hy-gh-14).toFixed(1)}px,0)`;
+}
+
+/* ---------- build per-day UI ---------- */
+function render(){
+ const d=dayData(),est=!STATIONS[state.station].continuous,ready=points().length>1||!!d.sun,has=points().length>1&&tideAt(state.cursor)!==null;
+ $('date').value=state.day;$('stMarina').setAttribute('aria-pressed',state.station==='8677832');$('stSimons').setAttribute('aria-pressed',state.station==='8677344');
+ $('feet').setAttribute('aria-pressed',state.unit==='ft');$('meters').setAttribute('aria-pressed',state.unit==='m');
+ $('noaaLink').href=`https://tidesandcurrents.noaa.gov/noaatidepredictions.html?id=${state.station}`;
+ $('dayHeading').textContent=fmt(midnight(state.day)+12*HOUR,{weekday:'long',month:'long',day:'numeric'});
+ $('daySummary').textContent=d.sun?`${Math.floor(d.sun.day_length/3600)}h ${Math.floor(d.sun.day_length%3600/60)}m of daylight`:(state.loading?'Loading daylight':'Daylight unavailable');
+ $('today').hidden=state.day===dateKey(new Date());
+ state.cursor=clamp(state.cursor,d.start,d.end-1);
+ view.has=has;
+ const veil=$('veil');
+ if(state.loading){veil.hidden=false;$('veilTitle').textContent='Reading the tide';$('veilMsg').textContent='Asking NOAA for predictions and Sunrise-Sunset.org for daylight.';$('veilGo').hidden=true;}
+ else if(!ready||state.issues.length&&!has){veil.hidden=false;$('veilTitle').textContent='Schedules unavailable';$('veilMsg').textContent='Check your connection and try again. No estimated schedule is substituted for missing source data.';$('veilGo').hidden=false;}
+ else veil.hidden=true;
+ $('curveNote').textContent=`${est?'Curve estimated between NOAA highs and lows.':'Curve from NOAA six-minute predictions.'} Heights above MLLW. Eastern time.`;
+ renderDays();renderChart(true);renderEvents();renderSheet();updateNext();updateAll();
+}
+function updateAll(){updateEventStates();updateNext();}
+function updateNext(){const e=nextEvent(),b=$('next');if(!e||!view.has&&!state.solar[state.day]){b.hidden=true;return;}b.hidden=false;b.dataset.time=e.t;b.className='next'+(e.kind==='sunrise'||e.kind==='sunset'?' sun':'');
+ $('nextIcon').innerHTML=`<use href="#i-${e.kind}"/>`;$('nextText').innerHTML=`<b>${EVNAME[e.kind]}</b> ${esc(time(e.t))}${e.v!==undefined?' · '+esc(height(e.v)):''} · in ${untilText(e.t-state.cursor)}`;}
+
+function renderDays(){
+ const keys=Array.from({length:state.span},(_,i)=>addDays(state.anchor,i)),dom=state.domain;
+ $('days').innerHTML='<span class="dayind" id="dayind"></span>'+keys.map(k=>{
+  const d=dayData(k),pts=points(k).filter((_,i)=>i%4===0),vals=d.events.map(p=>p.v);
+  let sparkSvg='';if(pts.length>1){const x=t=>(t-d.start)/(d.end-d.start)*100,y=v=>20-(v-dom.min)/(dom.max-dom.min)*18;sparkSvg=`<svg class="spark" viewBox="0 0 100 20" preserveAspectRatio="none" aria-hidden="true">${d.sun?`<rect x="${x(d.sun.sunrise).toFixed(1)}" y="0" width="${(x(d.sun.sunset)-x(d.sun.sunrise)).toFixed(1)}" height="20"/>`:''}<path vector-effect="non-scaling-stroke" d="${pts.map((p,i)=>(i?'L':'M')+x(p.t).toFixed(1)+','+y(p.v).toFixed(1)).join('')}"/></svg>`;}
+  const rng=vals.length?`${hnum(Math.max(...vals))}/${hnum(Math.min(...vals))}`:'';
+  return `<button class="day" data-day="${k}" aria-pressed="${k===state.day}" aria-label="${esc(fmt(midnight(k)+12*HOUR,{weekday:'long',month:'long',day:'numeric'}))}"><span class="dow">${esc(fmt(midnight(k)+12*HOUR,{weekday:'short'}))}</span><span class="dom">${esc(fmt(midnight(k)+12*HOUR,{day:'numeric'}))}</span>${sparkSvg}<span class="rng">${rng||'&nbsp;'}</span></button>`;}).join('');
+ requestAnimationFrame(()=>placeIndicator(false));
+}
+function placeIndicator(animate=true){const days=$('days'),ind=$('dayind'),b=days.querySelector('[aria-pressed=true]');if(!ind||!b)return;if(!animate||RM.matches){ind.style.transition='none';}ind.style.width=b.offsetWidth+'px';ind.style.transform=`translateX(${b.offsetLeft}px)`;if(!animate||RM.matches){void ind.offsetWidth;ind.style.transition='';}const want=b.offsetLeft-(days.clientWidth-b.offsetWidth)/2;if(Math.abs(days.scrollLeft-want)>8&&days.scrollWidth>days.clientWidth+2)days.scrollTo({left:want,behavior:RM.matches?'auto':'smooth'});}
+
+/* chart */
+let geo=null;
+function renderChart(reveal=false){
+ const host=$('chartHost'),w=Math.max(280,$('chartwrap').clientWidth),h=w<520?136:146,L=14,R=14,T=38,B=40,d=dayData(),dom=state.domain,pts=points(),est=!STATIONS[state.station].continuous;
+ const x=t=>L+(t-d.start)/(d.end-d.start)*(w-L-R),y=v=>h-B-(v-dom.min)/(dom.max-dom.min)*(h-B-T);
+ geo={w,h,L,R,T,B,start:d.start,end:d.end,x,y,len:d.end-d.start};
+ let s=`<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" class="${reveal&&!RM.matches?'reveal':''}" role="img" aria-label="Tide and daylight for ${esc(state.day)}"><defs><linearGradient id="cf" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#62e3d3" stop-opacity=".55"/><stop offset="1" stop-color="#62e3d3" stop-opacity=".03"/></linearGradient><linearGradient id="dg" gradientUnits="userSpaceOnUse" x1="${L}" y1="0" x2="${w-R}" y2="0">`;
+ if(d.sun){const f=t=>clamp((t-d.start)/(d.end-d.start),0,1).toFixed(4),sn=d.sun;s+=`<stop offset="${f(sn.civil_twilight_begin)}" stop-color="#ffb935" stop-opacity="0"/><stop offset="${f(sn.sunrise)}" stop-color="#ffb935" stop-opacity=".2"/><stop offset="${f((sn.sunrise+sn.sunset)/2)}" stop-color="#ffd27a" stop-opacity=".12"/><stop offset="${f(sn.sunset)}" stop-color="#ffb935" stop-opacity=".2"/><stop offset="${f(sn.civil_twilight_end)}" stop-color="#ffb935" stop-opacity="0"/>`;}
+ s+=`</linearGradient><clipPath id="pc"><rect x="${L}" y="${T-6}" width="${w-L-R}" height="${h-T-B+12}"/></clipPath></defs>`;
+ if(d.sun)s+=`<rect x="${x(d.sun.civil_twilight_begin)}" y="${T-6}" width="${x(d.sun.civil_twilight_end)-x(d.sun.civil_twilight_begin)}" height="${h-T-B+6}" fill="url(#dg)"/>`;
+ /* gridlines */
+ const step=state.unit==='m'?1/0.3048:2;for(let v=Math.ceil(dom.min/step)*step;v<=dom.max;v+=step){const yy=y(v);s+=`<line x1="${L}" x2="${w-R}" y1="${yy}" y2="${yy}" stroke="${Math.abs(v)<1e-6?'rgba(190,235,240,.4)':'rgba(190,235,240,.1)'}" stroke-width="1"${Math.abs(v)<1e-6?' stroke-dasharray="2 4"':''}/><text x="${L+4}" y="${yy-4}" font-size="10.5" fill="#9bbdc7">${(v*unitK()).toFixed(0).replace('-','−')}${Math.abs(v)<1e-6?' MLLW':''}</text>`;}
+ /* beach windows */
+ for(const bw of beachWindows())s+=`<rect x="${x(bw.from)}" y="${h-B-6}" width="${x(bw.to)-x(bw.from)}" height="6" rx="3" fill="#ecd29e" opacity=".9"><title>Beach window ${esc(time(bw.from))} to ${esc(time(bw.to))}</title></rect>`;
+ /* curve */
+ if(pts.length>1){const path=pts.map((p,i)=>(i?'L':'M')+x(p.t).toFixed(1)+','+y(p.v).toFixed(1)).join('');s+=`<g clip-path="url(#pc)"><path d="${path}L${x(pts.at(-1).t)},${h-B}L${x(pts[0].t)},${h-B}Z" fill="url(#cf)"/><path d="${path}" fill="none" stroke="#62e3d3" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"${est?' stroke-dasharray="7 5"':''}/></g>`;}
+ /* sun markers */
+ if(d.sun)for(const [t,k,label] of [[d.sun.sunrise,'sunrise','Sunrise'],[d.sun.sunset,'sunset','Sunset']]){const px=x(t),ax=clamp(px,L+22,w-R-22);s+=`<line x1="${px}" x2="${px}" y1="${T+8}" y2="${h-B}" stroke="#ffb935" stroke-opacity=".55" stroke-dasharray="2 5"/><g color="#ffb935"><use href="#i-${k}" class="icon" x="${ax-10}" y="2" width="20" height="20"/></g><text x="${ax}" y="${T-5}" text-anchor="middle" font-size="11" font-weight="700" fill="#ffd27a">${esc(shortTime(t))}</text>`;}
+ /* tide events */
+ for(const p of d.events){const px=x(p.t),py=y(p.v),hi=isHigh(p),lx=clamp(px,L+26,w-R-26);s+=`<circle cx="${px}" cy="${py}" r="5" fill="#0b2a4a" stroke="#62e3d3" stroke-width="2.4"/>`;
+  s+=hi?`<text x="${lx}" y="${py-22}" text-anchor="middle" font-size="12" font-weight="750" fill="#e9f6f7">${esc(shortTime(p.t))}</text><text x="${lx}" y="${py-10}" text-anchor="middle" font-size="11" fill="#9bbdc7">${esc(height(p.v))}</text>`:`<text x="${lx}" y="${py+19}" text-anchor="middle" font-size="12" font-weight="750" fill="#e9f6f7">${esc(shortTime(p.t))}</text><text x="${lx}" y="${py+31}" text-anchor="middle" font-size="11" fill="#9bbdc7">${esc(height(p.v))}</text>`;}
+ /* hours */
+ const hrs=(d.end-d.start)/HOUR,every=w<520?6:3;for(let i=0;i<hrs;i+=every)s+=`<text x="${x(d.start+i*HOUR)}" y="${h-7}" font-size="10.5" fill="#9bbdc7" text-anchor="${i===0?'start':'middle'}">${esc(hourLabel(d.start+i*HOUR))}</text>`;
+ if(state.day===dateKey(new Date())){const px=x(Date.now());s+=`<line x1="${px}" x2="${px}" y1="${T}" y2="${h-B}" stroke="#9bbdc7" stroke-opacity=".6" stroke-dasharray="1 4"/><text x="${clamp(px,L+14,w-R-14)}" y="${h-7}" text-anchor="middle" font-size="10.5" font-weight="700" fill="#fff">now</text>`;}
+ s+=`<g id="ph"><line id="phLine" y1="${T-6}" y2="${h-B}" stroke="#f1fbfa" stroke-width="1.5"/><circle id="phDot" r="8" fill="#f1fbfa" stroke="#0b2a4a" stroke-width="3"/><circle id="phHalo" r="16" fill="none" stroke="#f1fbfa" stroke-opacity=".35"/><rect id="phTagBg" y="${h-B+9}" width="50" height="19" rx="9.5" fill="#f1fbfa"/><text id="phTag" y="${h-B+22.5}" text-anchor="middle" font-size="11.5" font-weight="800" fill="#04101e"></text></g></svg>`;
+ host.innerHTML=s;placeHead();
+}
+let lastTagText='';
+function placeHead(){if(!geo)return;const ph=$('ph');if(!ph)return;const px=geo.x(state.cursor),v=tideAt(state.cursor),py=v===null?geo.h-geo.B:geo.y(v);ph.setAttribute('transform',`translate(${px.toFixed(1)} 0)`);
+ $('phDot').setAttribute('cy',py.toFixed(1));$('phHalo').setAttribute('cy',py.toFixed(1));$('phDot').style.opacity=$('phHalo').style.opacity=v===null?0:1;
+ const tag=shortTime(state.cursor),tw=$('phTag');if(tag!==lastTagText||!tw.textContent){tw.textContent=tag;lastTagText=tag;const bb=tw.getBBox?tw.getBBox():{width:36};$('phTagBg').setAttribute('width',(bb.width+16).toFixed(0));$('phTagBg').setAttribute('x',(-(bb.width+16)/2).toFixed(1));}
+ const clampX=clamp(px,geo.L+30,geo.w-geo.R-30)-px;$('phTagBg').style.transform=$('phTag').style.transform=`translateX(${clampX.toFixed(1)}px)`;}
+
+/* event strip */
+function renderEvents(){
+ const ev=dayEvents(),bw=beachWindows(),items=[...ev.map(e=>({...e}))];
+ for(const w of bw)items.push({kind:'beach',t:w.low.t,from:w.from,to:w.to});
+ const key=e=>e.kind==='beach'?e.from+1:e.t;items.sort((a,b)=>key(a)-key(b));
+ const ic={sunrise:'sunrise',sunset:'sunset',high:'high',low:'low',beach:'beach'};
+ $('events').innerHTML=items.length?items.map(e=>{const sun=e.kind==='sunrise'||e.kind==='sunset',detail=e.kind==='beach'?`${shortTime(e.from)} to ${shortTime(e.to)}`:'',tm=e.kind==='beach'?`${shortTime(e.from)}–${shortTime(e.to)}`:time(e.t);
+  return `<button class="ev ${sun?'sun':''} ${e.kind==='beach'?'beach':''}" data-time="${e.t}" data-kind="${e.kind}" aria-label="${esc(EVNAME[e.kind]+' at '+(e.kind==='beach'?detail:time(e.t))+(e.v!==undefined?', '+height(e.v):''))}">${icon(ic[e.kind])}<span class="n">${EVNAME[e.kind]}</span><span class="t">${esc(tm)}${e.v!==undefined?`<small>${esc(height(e.v))}</small>`:''}</span></button>`;}).join(''):`<div class="note" style="align-self:center;margin:0 6px">${state.loading?'Loading the day.':'No events to show. Refresh to load schedules.'}</div>`;
+ updateEventStates();
+}
+function updateEventStates(){const nx=nextEvent();let marked=false;$('events').querySelectorAll('.ev').forEach(el=>{const t=Number(el.dataset.time),kind=el.dataset.kind,here=Math.abs(t-state.cursor)<2*MIN&&kind!=='beach';el.classList.toggle('here',here);const isNext=!!nx&&!marked&&t===nx.t&&kind!=='beach';if(isNext)marked=true;el.classList.toggle('next',isNext);});}
+
+/* sheet */
+function renderSheet(){
+ const d=dayData(),bw=beachWindows(),mi=moonInfo(midnight(state.day)+12*HOUR);
+ $('windows').innerHTML=bw.length?bw.map(w=>`<li><button data-time="${w.low.t}"><span class="l">Around the ${esc(shortTime(w.low.t))} low, ${esc(height(w.low.v))}</span><span class="w">${esc(time(w.from))} – ${esc(time(w.to))}</span></button></li>`).join(''):`<li><span class="l">${d.sun&&d.events.length?'No low tide falls in daylight today.':state.loading?'Loading the day.':'Tide or daylight times are unavailable. Refresh to load them.'}</span></li>`;
+ if(d.sun)$('windows').insertAdjacentHTML('beforeend',`<li><span class="l">Sunrise to sunset</span><span class="w">${esc(time(d.sun.sunrise))} – ${esc(time(d.sun.sunset))}</span></li><li><span class="l">Civil twilight ends</span><span class="w">${esc(time(d.sun.civil_twilight_end))}</span></li>`);
+ $('moonName').textContent=mi.name;$('moonSub').textContent=`${Math.round(mi.illum*100)}% lit`;
+ const R=40,mp=moonPath(R,mi.p);$('moonSvg').innerHTML=`<circle r="${R}" fill="#26334f"/><g transform="${mp.flip?'scale(-1 1)':''}"><path fill="#f3f1e4" d="M0 ${-R}A${R} ${R} 0 0 1 0 ${R}A${(Math.abs(mp.k)*R).toFixed(2)} ${R} 0 0 ${mp.k>0?0:1} 0 ${-R}Z"/></g>`;
+ const vals=d.events.map(p=>p.v),range=vals.length?Math.max(...vals)-Math.min(...vals):null;
+ $('moonText').textContent=`${mi.spring>.6?'Near a new or full moon, so these are spring tides. Highs run higher and lows run lower than usual.':mi.spring<-.6?'Near a quarter moon, so these are neap tides. The range is smaller than usual.':'Between spring and neap tides.'}${range!==null?` Today's predicted range here is ${height(range)}.`:''} The phase is calculated from the lunar cycle, not fetched.`;
+}
+
+/* ---------- time control ---------- */
+let anim=null,dragState=null,lastSnap=null;
+function animateTo(target,ms=800){stopPlay();const d=dayBounds();target=clamp(target,d.start,d.end-1);if(RM.matches||ms<=0){anim=null;state.cursor=target;return;}anim={from:state.cursor,to:target,t0:performance.now(),ms};}
+function startIntro(){if(RM.matches)return;const d=dayBounds(),target=state.cursor;state.cursor=d.start;anim={from:d.start,to:target,t0:performance.now()+250,ms:3400,intro:true};}
+function stopAnim(){anim=null;}
+function stopPlay(){if(!state.playing)return;state.playing=false;$('play').classList.remove('on');$('play').setAttribute('aria-pressed','false');$('play').setAttribute('aria-label','Play the day');}
+function togglePlay(){if(state.playing){stopPlay();return;}stopAnim();const d=dayBounds();if(state.cursor>d.end-2*HOUR)state.cursor=d.start;state.playing=true;$('play').classList.add('on');$('play').setAttribute('aria-pressed','true');$('play').setAttribute('aria-label','Pause');}
+function snap(t,pxPerMs){const thr=10/pxPerMs;let best=null;for(const e of dayEvents()){const dt=Math.abs(e.t-t);if(dt<thr&&(!best||dt<best.dt))best={e,dt};}
+ if(best){if(lastSnap!==best.e.t){lastSnap=best.e.t;try{navigator.vibrate&&navigator.vibrate(7);}catch{}const el=$('events').querySelector(`.ev[data-time="${best.e.t}"]:not(.beach)`);if(el){el.classList.remove('ping');void el.offsetWidth;el.classList.add('ping');}}return best.e.t;}
+ lastSnap=null;return t;}
+function scrubTo(t,pxPerMs){stopAnim();stopPlay();const d=dayBounds();state.cursor=clamp(snap(t,pxPerMs),d.start,d.end-1);}
+function changeDay(key,keepClock=true){stopAnim();stopPlay();if(!validDay(key)){toast('Choose a valid date between 1900 and 2100.');$('date').value=state.day;return;}
+ const oldD=dayBounds(),offset=state.cursor-oldD.start;state.day=key;const nd=dayBounds();
+ state.cursor=key===dateKey(new Date())?Date.now():keepClock?clamp(nd.start+Math.min(offset,nd.len-MIN),nd.start,nd.end-1):nd.start+12*HOUR;
+ const inside=key>=state.anchor&&key<=addDays(state.anchor,state.span-1);if(!inside){state.anchor=key;syncUrl();load();return;}
+ syncUrl();render();placeIndicator(true);}
+function shiftWindow(step){state.anchor=addDays(state.anchor,step*state.span);state.day=addDays(state.day,step*state.span);state.cursor=midnight(state.day)+12*HOUR;syncUrl();load();}
+
+/* stage drag scrubs the day */
+const stage=$('stage');
+stage.addEventListener('pointerdown',e=>{if(e.target.closest('button,a,input,select,.veil-card'))return;dragState={x:e.clientX,c:state.cursor,id:e.pointerId};stage.setPointerCapture(e.pointerId);stage.classList.add('dragging');hideHint();});
+stage.addEventListener('pointermove',e=>{if(!dragState||dragState.id!==e.pointerId)return;const d=dayBounds(),ppm=W*.9/d.len;scrubTo(dragState.c+(e.clientX-dragState.x)/ppm,ppm);});
+const endDrag=e=>{if(dragState&&dragState.id===e.pointerId){dragState=null;stage.classList.remove('dragging');}};
+stage.addEventListener('pointerup',endDrag);stage.addEventListener('pointercancel',endDrag);
+/* chart drag is absolute */
+const cw=$('chartwrap');let chartDrag=false;
+function chartTime(e){const r=cw.getBoundingClientRect(),px=(e.clientX-r.left)/r.width*geo.w,fr=clamp((px-geo.L)/(geo.w-geo.L-geo.R),0,1);return {t:geo.start+fr*geo.len,ppm:(geo.w-geo.L-geo.R)*(r.width/geo.w)/geo.len*(geo.w/r.width)};}
+cw.addEventListener('pointerdown',e=>{if(!geo)return;chartDrag=true;cw.setPointerCapture(e.pointerId);hideHint();const c=chartTime(e);scrubTo(c.t,(geo.w-geo.L-geo.R)/geo.len);});
+cw.addEventListener('pointermove',e=>{if(!chartDrag||!geo)return;const c=chartTime(e);scrubTo(c.t,(geo.w-geo.L-geo.R)/geo.len);});
+const endChart=()=>{chartDrag=false;};cw.addEventListener('pointerup',endChart);cw.addEventListener('pointercancel',endChart);
+let hintGone=false;function hideHint(){if(hintGone)return;hintGone=true;$('hint').classList.add('gone');}
+setTimeout(hideHint,9000);
+
+/* buttons */
+$('days').addEventListener('click',e=>{const b=e.target.closest('[data-day]');if(b)changeDay(b.dataset.day);});
+$('events').addEventListener('click',e=>{const b=e.target.closest('[data-time]');if(b){hideHint();animateTo(Number(b.dataset.time),900);}});
+$('windows').addEventListener('click',e=>{const b=e.target.closest('[data-time]');if(b){animateTo(Number(b.dataset.time),900);window.scrollTo({top:0,behavior:RM.matches?'auto':'smooth'});}});
+$('next').onclick=e=>{animateTo(Number(e.currentTarget.dataset.time),1000);hideHint();};
+$('play').onclick=()=>{hideHint();togglePlay();};
+$('prevWin').onclick=()=>shiftWindow(-1);$('nextWin').onclick=()=>shiftWindow(1);
+$('today').onclick=()=>changeDay(dateKey(new Date()));
+$('calBtn').onclick=()=>{try{$('date').showPicker();}catch{$('date').focus();$('date').click();}};
+$('date').onchange=e=>changeDay(e.target.value);
+for(const b of document.querySelectorAll('[data-station]'))b.onclick=()=>{if(state.station===b.dataset.station)return;state.station=b.dataset.station;syncUrl();load();};
+$('feet').onclick=()=>{state.unit='ft';syncUrl();render();};$('meters').onclick=()=>{state.unit='m';syncUrl();render();};
+$('refresh').onclick=$('refresh2').onclick=()=>load(true);$('veilGo').onclick=()=>load(true);
+$('share').onclick=async()=>{syncUrl();try{await navigator.clipboard.writeText(location.href);toast('Link copied with this date, station, and units.');}catch{toast('Copy the address in your browser to share this day.');}};
+$('download').onclick=()=>{const a=document.createElement('a');const u=URL.createObjectURL(new Blob([SOURCE],{type:'text/html'}));a.href=u;a.download='jekyll-tides.html';a.click();setTimeout(()=>URL.revokeObjectURL(u),2000);};
+/* keyboard */
+document.addEventListener('keydown',e=>{if(e.metaKey||e.ctrlKey||e.altKey)return;const tag=e.target.tagName,onCtl=e.target.closest?.('button,a,select,summary');
+ if(tag==='INPUT'||tag==='SELECT')return;
+ const step=e.shiftKey?HOUR:6*MIN;
+ if(e.key==='ArrowLeft'&&!onCtl||e.key==='ArrowLeft'&&e.target===cw){e.preventDefault();scrubTo(state.cursor-step,Infinity);}
+ else if(e.key==='ArrowRight'&&!onCtl||e.key==='ArrowRight'&&e.target===cw){e.preventDefault();scrubTo(state.cursor+step,Infinity);}
+ else if(e.key==='Home'&&e.target===cw){e.preventDefault();scrubTo(dayBounds().start,Infinity);}
+ else if(e.key==='End'&&e.target===cw){e.preventDefault();scrubTo(dayBounds().end-1,Infinity);}
+ else if(e.key==='PageUp'||e.key==='['){changeDay(addDays(state.day,-1));}
+ else if(e.key==='PageDown'||e.key===']'){changeDay(addDays(state.day,1));}
+ else if(e.key===' '&&!onCtl){e.preventDefault();togglePlay();}
+ else if(e.key==='n'&&!onCtl){const nx=nextEvent();if(nx)animateTo(nx.t,900);}
+ hideHint();});
+
+/* ---------- frame loop ---------- */
+function frame(now){
+ requestAnimationFrame(frame);
+ if(document.hidden){view.last=now;return;}
+ const dt=Math.min(.05,(now-view.last)/1000);view.last=now;
+ if(anim&&now>=anim.t0){const k=Math.min(1,(now-anim.t0)/anim.ms),e=k<.5?4*k*k*k:1-Math.pow(-2*k+2,3)/2,ease=anim.intro?e:1-Math.pow(1-k,4);state.cursor=lerp(anim.from,anim.to,ease);if(k>=1){state.cursor=anim.to;anim=null;}}
+ else if(state.playing){const d=dayBounds();state.cursor+=dt*d.len/16000;if(state.cursor>=d.end-1){state.cursor=d.end-1;stopPlay();}}
+ const v=tideAt(state.cursor),r=tideRate(state.cursor),target=v===null?(state.domain.min+state.domain.max)/2.6:v,k=RM.matches||view.level===null?1:1-Math.exp(-dt*(dragState||chartDrag?16:6));
+ view.level=view.level===null?target:view.level+(target-view.level)*k;
+ view.flow+=((v===null?0:r??0)-view.flow)*(RM.matches?1:1-Math.exp(-dt*4));
+ view.wet=view.wet===null||view.wet<view.level?view.level:Math.max(view.level,view.wet-dt*.45);
+ view.has=v!==null;
+ drawScene(now);updateReadout();placeHead();theme();
+ if((frame.n=(frame.n||0)+1)%10===0)updateAll();
+}
+let lastTheme='';
+function theme(){const sun=state.solar[state.day];if(!sun)return;const L=lightAt(state.cursor,sun),P=palette(L,state.cursor<(sun.sunrise+sun.sunset)/2),dark=[2,10,22],panel=mix(P.top,dark,.68),panel2=mix(P.top,dark,.5),key=panel.map(x=>x|0).join(',')+L.toFixed(2);if(key===lastTheme)return;lastTheme=key;const r=document.documentElement.style;r.setProperty('--panel',rgb(panel));r.setProperty('--panel-2',rgb(panel2));$('themeColor').content=rgb(panel);}
+
+/* ---------- start ---------- */
+new ResizeObserver(()=>{resizeScene();renderChart();placeIndicator(false);}).observe(stage);
+window.addEventListener('resize',()=>{renderChart();placeIndicator(false);});
+setInterval(()=>{if(state.day===dateKey(new Date()))renderChart();},60000);
+window.JekyllPlanner={dateKey,addDays,midnight,dayData,tideAt,points,state,changeDay,load,render,animateTo};
+resizeScene();syncUrl();render();requestAnimationFrame(frame);load();
+})();
+</script>
+</body>
+</html>

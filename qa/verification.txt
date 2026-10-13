@@ -1,0 +1,5 @@
+Redesign pass.
+Checked in a browser against live NOAA and Sunrise-Sunset.org responses: a six-day test range loaded six solar days and 35 Marina high/low events. St. Simons loaded 2,160 six-minute samples.
+Exercised: stage drag (370 min), chart click (noon), day chip switch, station switch, ft/m toggle, play, next-event jump. Load failure shows the retry card; the failed-fetch path was triggered by stubbing fetch.
+Rendered at 1280x800 (sunrise, midday, sunset, night) and 390x844 (sunset). No horizontal overflow at 390px after the grid fix.
+Not checked: real touch input on a phone, Safari, prefers-reduced-motion in a live browser, screen reader output for the chart slider, frame rate on low-end phones, DST days in the new UI (the date logic is unchanged from the prior version, which verified 23 and 25 hour days).
