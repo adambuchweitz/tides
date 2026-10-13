@@ -4,7 +4,7 @@ const previous = await Bun.file('publication.json').exists() ? await Bun.file('p
 const response = await fetch(`${c.publishing_url}/api/documents${previous ? '/'+previous.id : ''}`, {
   method: previous ? 'PATCH' : 'POST',
   headers: {Authorization: `Bearer ${c.publishing_token}`, 'Content-Type': 'application/json'},
-  body: JSON.stringify({title:'Jekyll Island · Tides & daylight',html:await Bun.file('index.html').text(),visibility:'public',...(previous?{}:{created_by:'agent'})})
+  body: JSON.stringify({title:'Tides & daylight',html:await Bun.file('index.html').text(),visibility:'public',...(previous?{}:{created_by:'agent'})})
 });
 if (!response.ok) throw new Error(`Publish failed: ${response.status}`);
 const document=await response.json();

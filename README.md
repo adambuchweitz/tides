@@ -1,6 +1,6 @@
-# Jekyll Island tides & daylight
+# Tides & daylight
 
-An interactive planner for Jekyll Island, Georgia. It puts NOAA tide predictions and sunrise/sunset times on one shared timeline, so you can see when the water is low and when it is light.
+An interactive shoreline planner for NOAA tide stations. It puts tide predictions and sunrise/sunset times on one shared timeline, so you can see when the water is low and when it is light. It starts at Jekyll Island Marina, Georgia; choose another station from the location button or a URL.
 
 The scene shows the water at the predicted tide height and the sky following the real sun. Below it, a chart shows the day's tide curve, daylight, and beach windows, along with a list of events for the day.
 
@@ -22,7 +22,7 @@ Edit `src/index.html`, then regenerate the single-file app:
 node build.mjs
 ```
 
-`build.mjs` replaces the `{{FONT}}` placeholder with `src/archivo.woff2` as a base64 data URL and writes `index.html`. Edit the source, not the generated file. The project has no npm dependencies and no `package.json`.
+`build.mjs` embeds `src/archivo.woff2`, the helpers in `src/locations.js`, the location controls in `src/location-ui.js`, and chart label placement in `src/label-layout.js`, then writes `index.html`. Edit those source files and `src/index.html`, then rebuild. The project has no npm dependencies and no `package.json`.
 
 ## Using the planner
 
@@ -30,10 +30,11 @@ node build.mjs
 - **Chart:** click or drag to set the time.
 - **Days:** the previous and next arrows move the whole window by its length. Day chips select one day within it. The window is seven days by default.
 - **Events:** tap an event to jump to its time. The beach window list does the same.
-- **Station:** switch between Jekyll Island Marina and St. Simons Island.
+- **Location:** search NOAA tide stations by name, state, or station ID. The picker shows whether a station provides a full curve or only highs and lows. A failed or cancelled switch keeps the current view and URL.
+- **Nearby beach:** expand “Sunlight at a nearby beach” to set a display name, a latitude/longitude pair, or a timezone. Tides still come from the selected station. “Use station location” clears these overrides; choosing another station clears them too.
 - **Units:** switch between feet (ft) and meters (m).
 - **Refresh schedules:** request the data again.
-- **Copy link to this day:** copies a URL that includes the current date, station, and units.
+- **Copy link to this view:** copies a URL that includes the date window, station, units, and any custom location settings.
 - **Download this HTML:** saves the page as a file.
 
 ### Keyboard
@@ -50,29 +51,41 @@ node build.mjs
 
 Space and the arrow keys do nothing while a button, link, or select has focus, so they do not conflict with keyboard navigation of the controls. Arrow keys still work when the chart has focus.
 
+In station search, use the arrow keys to move through results and Enter to select. Escape clears the search, then closes the sheet. Closing it cancels a pending location change.
+
 ## URL parameters
 
 The app keeps the date window, station, and units in the URL, so a link opens the same view.
 
 | Parameter | Values | Default |
 | --- | --- | --- |
-| `date` | `YYYY-MM-DD` | Current date in America/New_York |
+| `date` | `YYYY-MM-DD` | Current date in the location's timezone |
 | `start` | `YYYY-MM-DD` | The date shown |
 | `days` | `1` to `14` | `7` |
-| `station` | `8677832` (Marina) or `8677344` (St. Simons) | `8677832` |
+| `station` | A supported seven-digit NOAA tide station ID | `8677832` (Jekyll Island Marina) |
 | `unit` | `ft` or `m` | `ft` |
+| `lat`, `lng` | Latitude −90 to 90, longitude −180 to 180; supply both | Tide station coordinates |
+| `tz` | A timezone name, such as `America/Los_Angeles` | Detected from the sunlight coordinates |
+| `label` | Display name, up to 60 characters | Tide station name |
 
-Example: `index.html?date=2027-06-01&days=3&unit=m`
+San Francisco: `index.html?station=9414290&days=3&unit=m`
+
+Sunlight at a nearby beach, with tides from San Francisco: `index.html?station=9414290&lat=37.77&lng=-122.51&label=Ocean%20Beach`
+
+A station alone is enough: metadata supplies its name, coordinates, and prediction type, and the sunlight service resolves the local timezone. Invalid sunlight overrides are discarded with a notice. An invalid or unavailable station shows an error and a location picker; it never silently switches to Jekyll.
 
 ## Data sources
 
 - **Jekyll Island Marina, NOAA station 8677832** (in Jekyll Creek). Official high and low predictions come from NOAA. The curve between them is an estimate using half-cosine interpolation, and the app labels it that way.
 - **St. Simons Island, NOAA station 8677344.** A nearby reference station with six-minute predictions. Its curve is interpolated linearly from those samples.
-- **Sunrise-Sunset.org (v2)** supplies sunrise, sunset, and civil twilight for 31.07 N, 81.41 W.
+- **Sunrise-Sunset.org (v2)** supplies sunrise, sunset, civil twilight, and the local timezone for the selected sunlight coordinates.
+- **NOAA's metadata API** supplies station details and a searchable tide-prediction catalog. Harmonic stations provide six-minute curves; subordinate stations provide only high and low predictions.
 
-Everything is displayed in America/New_York, including on days with daylight saving time changes. Those days have 23 or 25 hours.
+Everything is displayed in the selected location's timezone, including on days with daylight saving time changes. The timezone appears beside the clock. Day boundaries account for short, long, and midnight-transition days.
 
 Results are cached in memory and in local storage, when the browser allows it. A cached copy up to six hours old is reused. Refresh requests the data again. If the request fails, the app keeps the last saved copy and labels it. If there is no saved copy, it shows a retry message instead of a made-up schedule.
+
+Sunlight caches include coordinates and timezone, so changing locations cannot reuse another place's schedule. The station catalog and recent stations are also kept locally. Days with no sunrise or sunset are shown explicitly; missing events are not assigned invented times.
 
 ## Limitations
 
@@ -91,3 +104,5 @@ Results are cached in memory and in local storage, when the browser allows it. A
 ## Verification
 
 Verification notes, including what was not checked, are in [`qa/verification.txt`](qa/verification.txt).
+
+Run the location, date-handling and chart-layout tests with `node --test test/*.test.js`.
