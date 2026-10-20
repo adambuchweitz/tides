@@ -13,9 +13,9 @@ Sonnet 5.5 designed the location controls and independently reviewed desktop and
 | Location design documentation | Resolved |
 | Scroll fade dims the primary action | Resolved |
 
-The override action row sits above the scroll fades. The final desktop and mobile recaptures show a full-contrast primary action. Reopening an expanded sheet preserves the current-location card in view.
+The override action row sits above the bottom scroll fade and below the top fade. The desktop and mobile recaptures show a full-contrast primary action at the bottom, with the action fading as it scrolls out at the top. Reopening an expanded sheet preserves the current-location card in view.
 
-The final reviewer reports two minor observations: the desktop bottom scroll cue is not visible in that capture, and actions may hard-clip at the top edge instead of fading. The second is an inference from CSS, not an observed interaction. Neither is scored as blocking or major; the disposition is **ship**.
+The final Sonnet reviewer reported two minor observations: an invisible desktop bottom scroll cue, and a possible hard clip of actions at the top edge. A subsequent implementation and browser check resolved both: a contrasting scrollbar reveals remaining content even when the fade covers empty space, and the top fade now paints above the action row. This follow-up was verified directly in Chromium at desktop and mobile widths, including shorter viewports that scroll the actions through the top edge; it was not another Sonnet review.
 
 The reviewer could not confirm whether the mobile `6.1 ft` chart label is fully clear of the dashed baseline; this was not scored as a regression. The final verdict used the new desktop and mobile sheet screenshots, the prior desktop shot, and narrow CSS/documentation excerpts. It did not read the full chart/canvas implementation or tests or operate the page.
 

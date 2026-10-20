@@ -223,10 +223,14 @@ svg{display:block}
 .loc-banner button{min-height:44px;color:var(--foam);text-decoration:underline;text-underline-offset:3px}
 .loc-scroll{position:relative;display:flex;flex:1;min-height:0}
 .loc-scroll::before,.loc-scroll::after{content:'';position:absolute;left:0;right:0;height:44px;pointer-events:none;z-index:2;opacity:0;transition:opacity .15s}
-.loc-scroll::before{top:0;background:linear-gradient(var(--panel),rgba(11,42,74,0))}
+.loc-scroll::before{top:0;z-index:4;background:linear-gradient(var(--panel),rgba(11,42,74,0))}
 .loc-scroll::after{bottom:0;background:linear-gradient(rgba(11,42,74,0),var(--panel) 90%)}
 .loc-scroll[data-top=true]::before,.loc-scroll[data-bottom=true]::after{opacity:1}
-.loc-body{padding:20px;overflow-y:auto;overscroll-behavior:contain;min-height:0;min-width:0;flex:1}
+.loc-body{padding:20px;overflow-y:auto;overscroll-behavior:contain;min-height:0;min-width:0;flex:1;scrollbar-gutter:stable}
+.loc-body::-webkit-scrollbar{width:8px}
+.loc-body::-webkit-scrollbar-track{background:var(--panel-2);border-radius:999px}
+.loc-body::-webkit-scrollbar-thumb{background:var(--muted);border-radius:999px}
+@supports not selector(::-webkit-scrollbar){.loc-body{scrollbar-width:thin;scrollbar-color:var(--muted) var(--panel-2)}}
 .loc-current h3{font-size:22px;font-weight:780;font-stretch:90%;line-height:1.2;overflow-wrap:anywhere}
 .loc-current>p{color:var(--muted);font-size:14px;line-height:1.5;margin-top:6px}
 .loc-details{margin:18px 0 0;display:grid;gap:14px}
@@ -252,7 +256,7 @@ svg{display:block}
 .spot-form input[aria-invalid=true]{border-color:var(--problem)}
 .spot-form .field-error{display:block;margin-top:5px;color:var(--problem);font-size:13px;font-weight:500;line-height:1.4}
 .spot-coords{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-/* Actions stay above the scroll fades; the scroll viewport still clips them. */
+/* Actions stay above the bottom fade and below the top fade. */
 .spot-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:center;position:relative;z-index:3}
 .spot-actions button{min-height:48px;padding:0 16px;border-radius:12px;font-size:14px;font-weight:700}
 .spot-actions .primary{background:var(--foam);color:var(--ink)}
